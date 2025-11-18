@@ -70,9 +70,35 @@ Table observable_catalog created successfully!
 ```
 
 **If you get a permissions error:**
-- Your AWS user needs `dynamodb:CreateTable` permission
-- Go to AWS Console → IAM → Users → Your User → Add permissions
-- Add policy: `AmazonDynamoDBFullAccess` (or create custom policy with just CreateTable)
+
+**Option A: Ask AWS Admin to Add Permissions**
+- Contact your AWS administrator
+- Ask them to attach `AmazonDynamoDBFullAccess` policy to your user (`test`)
+- Or ask for these specific permissions:
+  - `dynamodb:CreateTable`
+  - `dynamodb:DescribeTable`
+  - `dynamodb:PutItem`
+  - `dynamodb:UpdateItem`
+  - `dynamodb:GetItem`
+  - `dynamodb:Scan`
+  - `dynamodb:Query`
+
+**Option B: Create Table Manually in AWS Console** (if you have console access)
+1. Go to: AWS Console → DynamoDB → Tables
+2. Click **Create table**
+3. Fill in:
+   - **Table name:** `observable_catalog`
+   - **Partition key:** `indicator_key` (String)
+   - **Table settings:** Use default settings
+   - **Capacity mode:** On-demand
+4. Click **Create table**
+5. After table is created, add Global Secondary Index:
+   - Click on table → **Indexes** tab → **Create index**
+   - **Index name:** `indicator-type-index`
+   - **Partition key:** `indicator_type` (String)
+   - **Sort key:** `last_seen` (String)
+   - Click **Create index**
+6. Skip to Step 3 (Create S3 Bucket) - table is done!
 
 **What this created in AWS:**
 - Table name: `observable_catalog`
