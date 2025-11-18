@@ -707,7 +707,17 @@ Find all IPs seen in last 7 days:
 SELECT indicator, SUM(total_hits) as total_hits, MAX(export_timestamp) as last_export
 FROM splunk_observables.observables
 WHERE indicator_type = 'ip'
-  AND date >= DATE_FORMAT(DATE_ADD('day', -7, CURRENT_DATE), '%Y-%m-%d')
+  AND date >= CAST(DATE_FORMAT(DATE_ADD('day', -7, CURRENT_DATE), '%Y-%m-%d') AS VARCHAR)
+GROUP BY indicator
+ORDER BY total_hits DESC
+```
+
+Or simpler (if you know the date):
+```
+SELECT indicator, SUM(total_hits) as total_hits, MAX(export_timestamp) as last_export
+FROM splunk_observables.observables
+WHERE indicator_type = 'ip'
+  AND date >= '2025-11-11'
 GROUP BY indicator
 ORDER BY total_hits DESC
 ```
