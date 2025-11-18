@@ -1,9 +1,153 @@
 # AWS Setup From Scratch
 
-## Prerequisites
+## Step 0: Get Access to a Machine
 
-- AWS account (sign up at https://aws.amazon.com if you don't have one)
-- AWS CLI installed and configured
+**You need a machine to run commands on!** Choose one option:
+
+### Option A: Use Your Local Machine (Easiest)
+
+If you have a laptop/desktop with Python and Docker:
+```bash
+# Install requirements (if not already installed):
+# - Python 3.7+ (python.org)
+# - Docker Desktop (docker.com)
+# - AWS CLI (aws.amazon.com/cli)
+# - Git (git-scm.com)
+
+# Verify installations
+python --version
+docker --version
+aws --version
+git --version
+```
+
+**Continue to Step 1 below.**
+
+---
+
+### Option B: Use AWS CloudShell (Quick, Browser-based)
+
+CloudShell is a free browser-based shell in AWS Console.
+
+1. Log into AWS Console: https://console.aws.amazon.com
+2. Click the CloudShell icon (terminal icon) in the top-right toolbar
+3. Wait for shell to initialize (~30 seconds)
+
+**Pros:** 
+- Free, no setup needed
+- AWS CLI pre-configured
+- Python pre-installed
+
+**Cons:**
+- Can't run Docker Splunk (but you can still test AWS resources)
+- Limited storage
+
+**If using CloudShell, skip Docker Splunk steps and use Option 2 testing (AWS only).**
+
+---
+
+### Option C: Launch EC2 Instance (Full AWS Experience)
+
+Launch an Amazon Linux 2 EC2 instance:
+
+**Via AWS Console:**
+1. Go to EC2 Dashboard: https://console.aws.amazon.com/ec2
+2. Click **Launch Instance**
+3. Configure:
+   - **Name**: splunk-test
+   - **AMI**: Amazon Linux 2023
+   - **Instance type**: t2.medium (for Splunk) or t2.micro (for testing only)
+   - **Key pair**: Create new or select existing
+   - **Security group**: Allow SSH (port 22) and HTTP (ports 8000, 8089)
+4. Click **Launch Instance**
+5. Wait 2 minutes for instance to start
+6. Click **Connect** → **SSH client** for connection instructions
+
+**Via AWS CLI:**
+```bash
+# Create security group
+aws ec2 create-security-group \
+  --group-name splunk-test-sg \
+  --description "Security group for Splunk testing"
+
+# Allow SSH, Splunk Web (8000), Splunk API (8089)
+aws ec2 authorize-security-group-ingress \
+  --group-name splunk-test-sg \
+  --protocol tcp --port 22 --cidr 0.0.0.0/0
+
+aws ec2 authorize-security-group-ingress \
+  --group-name splunk-test-sg \
+  --protocol tcp --port 8000 --cidr 0.0.0.0/0
+
+aws ec2 authorize-security-group-ingress \
+  --group-name splunk-test-sg \
+  --protocol tcp --port 8089 --cidr 0.0.0.0/0
+
+# Launch instance (replace YOUR-KEY-NAME with your key pair name)
+aws ec2 run-instances \
+  --image-id resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
+  --instance-type t2.medium \
+  --key-name YOUR-KEY-NAME \
+  --security-groups splunk-test-sg \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=splunk-test}]'
+
+# Get instance public IP
+aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=splunk-test" "Name=instance-state-name,Values=running" \
+  --query 'Reservations[0].Instances[0].PublicIpAddress' \
+  --output text
+```
+
+**Connect to instance:**
+```bash
+ssh -i your-key.pem ec2-user@YOUR-INSTANCE-IP
+```
+
+**Once connected, install Docker:**
+```bash
+# Install Docker on Amazon Linux
+sudo yum update -y
+sudo yum install -y docker git python3-pip
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -a -G docker ec2-user
+
+# Log out and back in for group changes
+exit
+# ssh back in
+ssh -i your-key.pem ec2-user@YOUR-INSTANCE-IP
+
+# Verify Docker works
+docker ps
+```
+
+**Now continue to Step 1 below.**
+
+---
+
+### Option D: Use AWS Cloud9 (IDE in Browser)
+
+Cloud9 provides a full IDE in your browser with terminal access.
+
+1. Go to Cloud9: https://console.aws.amazon.com/cloud9
+2. Click **Create environment**
+3. Configure:
+   - **Name**: splunk-test
+   - **Instance type**: t2.medium (recommended) or t2.micro
+   - **Platform**: Amazon Linux 2
+4. Click **Create**
+5. Wait 2-3 minutes, then click **Open IDE**
+
+Cloud9 includes Python, Git, and AWS CLI pre-installed.
+
+**Install Docker:**
+```bash
+sudo yum install -y docker
+sudo systemctl start docker
+sudo usermod -a -G docker ec2-user
+```
+
+**Now continue to Step 1 below.**
 
 ---
 
