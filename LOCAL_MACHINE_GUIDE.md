@@ -654,7 +654,24 @@ Copy and paste ONLY this line:
 MSCK REPAIR TABLE splunk_observables.observables
 ```
 
+**Step 3b: Verify Partitions Were Added**
+Run this to see if partitions were discovered:
+```
+SHOW PARTITIONS splunk_observables.observables
+```
+
+If no partitions show up, manually add the partition:
+```
+ALTER TABLE splunk_observables.observables ADD PARTITION (date='2025-11-18') LOCATION 's3://splunk-observables-1763476191/observables/date=2025-11-18/'
+```
+
 **Step 4: Query Your Data**
+First, check if ANY data exists:
+```
+SELECT * FROM splunk_observables.observables LIMIT 10
+```
+
+Then query specific IPs:
 Now you can run queries like (copy ONLY the SQL, not the "sql" marker):
 
 Find a specific IP across all dates:
