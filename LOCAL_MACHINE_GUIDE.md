@@ -420,14 +420,16 @@ Copy the entire output and paste into Splunk search box.
    index=main | stats count by sourcetype
    ```
 
-6. **If sourcetype is NOT _json (like `unknown-too_small`), decode and extract:**
+6. **If sourcetype is NOT _json (like `unknown-too_small`), extract JSON from URL-encoded form data:**
    ```
    index=main
    | eval _raw=urldecode(_raw)
-   | spath input=_raw
+   | rex field=_raw "event=(?<json_event>.+)"
+   | eval json_event=urldecode(json_event)
+   | spath input=json_event
    | head 10
    ```
-   The data is URL-encoded, so we need to decode it first, then extract JSON fields.
+   The data comes as URL-encoded form data (`event={...}`), so we extract the `event` parameter, decode it, then parse JSON.
 
 7. **If still nothing, check the raw event:**
    ```

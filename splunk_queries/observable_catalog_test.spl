@@ -1,6 +1,8 @@
 index=main earliest=-24h latest=now
 | eval _raw=urldecode(_raw)
-| spath input=_raw
+| rex field=_raw "event=(?<json_event>.+)"
+| eval json_event=urldecode(json_event)
+| spath input=json_event
 | eval indicator_type=case(
     isnotnull(dest_ip) OR isnotnull(src_ip), "ip",
     isnotnull(user_agent) AND user_agent!="", "ua",
