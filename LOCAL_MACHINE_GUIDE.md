@@ -655,22 +655,25 @@ MSCK REPAIR TABLE splunk_observables.observables
 ```
 
 **Step 4: Query Your Data**
-Now you can run queries like:
-```sql
--- Find a specific IP across all dates
+Now you can run queries like (copy ONLY the SQL, not the "sql" marker):
+
+Find a specific IP across all dates:
+```
 SELECT indicator, first_seen, last_seen, total_hits, date
 FROM splunk_observables.observables
 WHERE indicator_type = 'ip'
   AND indicator = '10.0.0.1'
-ORDER BY date DESC;
+ORDER BY date DESC
+```
 
--- Find all IPs seen in last 7 days
+Find all IPs seen in last 7 days:
+```
 SELECT indicator, SUM(total_hits) as total_hits, MAX(last_seen) as last_seen
 FROM splunk_observables.observables
 WHERE indicator_type = 'ip'
   AND date >= DATE_FORMAT(DATE_ADD('day', -7, CURRENT_DATE), '%Y-%m-%d')
 GROUP BY indicator
-ORDER BY total_hits DESC;
+ORDER BY total_hits DESC
 ```
 
 **Option 3: Quick Local Search (for testing)**
