@@ -612,14 +612,14 @@ aws dynamodb get-item \
 4. Go to **Editor** tab
 
 **Step 1: Create Database**
-Run this query:
-```sql
+Copy and paste ONLY this line (not the "sql" part):
+```
 CREATE DATABASE IF NOT EXISTS splunk_observables
 ```
 
 **Step 2: Create Table**
-Run this query (replace bucket name if different):
-```sql
+Copy and paste ONLY the SQL below (replace bucket name if different):
+```
 CREATE EXTERNAL TABLE IF NOT EXISTS splunk_observables.observables (
   indicator string,
   indicator_type string,
@@ -649,8 +649,8 @@ TBLPROPERTIES ('skip.header.line.count'='1')
 ```
 
 **Step 3: Add Partitions**
-Run this query:
-```sql
+Copy and paste ONLY this line:
+```
 MSCK REPAIR TABLE splunk_observables.observables
 ```
 
