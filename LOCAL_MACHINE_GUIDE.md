@@ -372,19 +372,50 @@ Copy the entire output and paste into Splunk search box.
 
 #### 8d. Run Search Manually (for immediate results)
 
+**IMPORTANT:** The query searches `index=main` - make sure your sample data is in the `main` index!
+
 1. In the scheduled search, click **Open in Search**
-2. Change time range to **Last 24 hours**
-3. Click the green **Search** button
-4. Wait ~10 seconds
+
+2. **First, verify your data exists:**
+   ```
+   index=main | head 10
+   ```
+   If this shows no results, your data might be in a different index. Check:
+   ```
+   index=* | head 10
+   ```
+   Then update the query to use the correct index.
+
+3. **Run the full query with adjusted time range:**
+   - Change time range to **Last 24 hours** (or "All time" to test)
+   - The query should start with: `index=main earliest=-24h@h latest=@h`
+   - If you changed it to "Last 24 hours", the query should be: `index=main earliest=-24h latest=now`
+   - Click the green **Search** button
+   - Wait ~10 seconds
+
+4. **If still no results, check:**
+   - Does `index=main | head 10` show your sample data?
+   - Are the field names correct? Check: `index=main | head 1 | fields *`
+   - You should see fields like `src_ip`, `dest_ip`, `email`, `hash`
 
 #### 8e. Verify Summary Index Has Data
+
+**After running the search manually (Step 8d), check if data was written to summary index:**
 
 Run this search in Splunk:
 ```
 index=observable_catalog | head 10
 ```
 
-You should see aggregated observables (IPs with counts, first_seen, last_seen).
+**If no results:**
+1. Check if the search actually ran and completed (look for "0 events" or error messages)
+2. Verify the `collect` command at the end of the query is correct
+3. Make sure the `observable_catalog` index exists (Step 8a)
+4. Try running the search again with "All time" selected to ensure it processes your data
+
+**Expected:** You should see aggregated observables (IPs with counts, first_seen, last_seen, indicator_type, etc.)
+
+**If you see data:** Great! Continue to Step 9 (Run the Export Script).
 
 ---
 
