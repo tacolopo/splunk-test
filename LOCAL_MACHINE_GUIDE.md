@@ -420,7 +420,7 @@ Copy the entire output and paste into Splunk search box.
    ```
    This should show results if JSON extraction works.
 
-5. **Run the full query:**
+6. **Run the full query:**
    - Use the test query: `cat splunk_queries/observable_catalog_test.spl`
    - Change time range to **All time** (to ensure it processes your data)
    - Click the green **Search** button
