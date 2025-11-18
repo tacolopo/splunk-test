@@ -420,13 +420,14 @@ Copy the entire output and paste into Splunk search box.
    index=main | stats count by sourcetype
    ```
 
-6. **If sourcetype is NOT _json, try without sourcetype filter:**
+6. **If sourcetype is NOT _json (like `unknown-too_small`), decode and extract:**
    ```
    index=main
-   | spath
+   | eval _raw=urldecode(_raw)
+   | spath input=_raw
    | head 10
    ```
-   The `spath` command should still extract JSON fields even if sourcetype isn't _json.
+   The data is URL-encoded, so we need to decode it first, then extract JSON fields.
 
 7. **If still nothing, check the raw event:**
    ```

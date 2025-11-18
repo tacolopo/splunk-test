@@ -1,5 +1,6 @@
-index=main sourcetype=_json earliest=-24h latest=now
-| spath
+index=main earliest=-24h latest=now
+| eval _raw=urldecode(_raw)
+| spath input=_raw
 | eval indicator_type=case(
     isnotnull(dest_ip) OR isnotnull(src_ip), "ip",
     isnotnull(user_agent) AND user_agent!="", "ua",
