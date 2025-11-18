@@ -401,13 +401,38 @@ Copy the entire output and paste into Splunk search box.
    ```
    This shows all fields in your data. Verify you see: `src_ip`, `dest_ip`, `email`, `hash`, `user_agent`
 
-4. **Test with explicit JSON extraction:**
+4. **First, check if data exists at all:**
    ```
-   index=main sourcetype=_json
+   index=main | head 10
+   ```
+   If this shows 0 results, your data isn't in the main index. Try:
+   ```
+   index=* | head 10
+   ```
+   This searches all indexes.
+
+5. **Check what sourcetype your data has:**
+   ```
+   index=main | head 1 | fields sourcetype, source, _raw
+   ```
+   OR check all sourcetypes:
+   ```
+   index=main | stats count by sourcetype
+   ```
+
+6. **If sourcetype is NOT _json, try without sourcetype filter:**
+   ```
+   index=main
    | spath
    | head 10
    ```
-   The `spath` command extracts JSON fields. After running this, check if you see `src_ip`, `dest_ip`, `email`, `hash` fields.
+   The `spath` command should still extract JSON fields even if sourcetype isn't _json.
+
+7. **If still nothing, check the raw event:**
+   ```
+   index=main | head 1 | table _raw
+   ```
+   This shows the raw JSON. Verify it looks like: `{"_time": "...", "src_ip": "1.2.3.4", ...}`
 
 5. **If spath works, test the indicator extraction:**
    ```
