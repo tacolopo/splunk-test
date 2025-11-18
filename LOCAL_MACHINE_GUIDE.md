@@ -275,6 +275,7 @@ EOF
 docker cp sample_logs.json splunk:/opt/splunk/sample_logs.json
 
 # Index the data in Splunk
+# IMPORTANT: Do NOT use sudo with docker exec - it causes permission errors
 docker exec splunk /opt/splunk/bin/splunk add oneshot /opt/splunk/sample_logs.json \
   -sourcetype _json \
   -index main \
