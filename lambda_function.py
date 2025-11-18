@@ -9,7 +9,13 @@ logger.setLevel(logging.INFO)
 
 sys.path.insert(0, '/opt/python')
 
-from export_to_aws import SplunkObservableExporter
+try:
+    from export_to_aws import SplunkObservableExporter
+except ImportError as e:
+    logger.error(f"Failed to import export_to_aws: {e}")
+    logger.error(f"Python path: {sys.path}")
+    logger.error(f"Available in /opt/python: {os.listdir('/opt/python') if os.path.exists('/opt/python') else 'NOT FOUND'}")
+    raise
 
 def lambda_handler(event, context):
     logger.info("Starting Splunk observable export")

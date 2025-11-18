@@ -11,20 +11,16 @@ from typing import Dict, List, Optional
 from pathlib import Path
 import argparse
 
-try:
-    import pandas as pd
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-    PARQUET_AVAILABLE = True
-except ImportError:
-    PARQUET_AVAILABLE = False
+PARQUET_AVAILABLE = False
 
 try:
     import splunklib.client as client
     import splunklib.results as results
 except ImportError:
-    print("Error: splunk-sdk not installed. Run: pip install splunk-sdk")
-    sys.exit(1)
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.error("Error: splunk-sdk not installed. Run: pip install splunk-sdk")
+    raise
 
 logging.basicConfig(
     level=logging.INFO,
@@ -205,59 +201,7 @@ class SplunkObservableExporter:
                     fieldnames.update(row.keys())
                 fieldnames = sorted(list(fieldnames))
                 
-                if PARQUET_AVAILABLE:
-                    required_columns = ['actions', 'dest_ips', 'export_timestamp', 'first_seen', 
-                                       'indicator', 'indicator_type', 'last_seen', 'sourcetypes', 
-                                       'src_ips', 'total_hits', 'types', 'unique_dest_ips', 
-                                       'unique_src_ips', 'users', 'days_seen']
-                    
-                    df_data = []
-                    for row in data:
-                        cleaned_row = {}
-                        for k in fieldnames:
-                            v = row.get(k)
-                            if v is None:
-                                cleaned_row[k] = None
-                            elif isinstance(v, list):
-                                cleaned_row[k] = '|'.join(str(x) for x in v if x is not None) if v else None
-                            else:
-                                cleaned_row[k] = v
-                        df_data.append(cleaned_row)
-                    
-                    df = pd.DataFrame(df_data, columns=fieldnames)
-                    
-                    for col in required_columns:
-                        if col not in df.columns:
-                            df[col] = None
-                            logger.warning(f"Missing column {col} in data, adding as NULL")
-                    
-                    type_mapping = {}
-                    for col in df.columns:
-                        if col in ['total_hits', 'unique_src_ips', 'unique_dest_ips']:
-                            type_mapping[col] = 'Int64'
-                        elif col in ['days_seen']:
-                            type_mapping[col] = 'float64'
-                        else:
-                            type_mapping[col] = 'string'
-                    
-                    for col, dtype in type_mapping.items():
-                        if col in df.columns:
-                            if dtype == 'Int64':
-                                df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
-                            elif dtype == 'float64':
-                                df[col] = pd.to_numeric(df[col], errors='coerce').astype('float64')
-                            else:
-                                df[col] = df[col].astype('string')
-                    
-                    table = pa.Table.from_pandas(df)
-                    pq.write_table(table, str(temp_parquet), compression='snappy')
-                    self.s3_client.upload_file(str(temp_parquet), bucket, parquet_key)
-                    if master_file:
-                        logger.info(f"Uploaded master Parquet file to s3://{bucket}/{parquet_key} ({len(df)} records)")
-                    else:
-                        logger.info(f"Uploaded Parquet to s3://{bucket}/{parquet_key}")
-                else:
-                    logger.warning("Parquet libraries not available, skipping Parquet export")
+                logger.info("Parquet export disabled, using CSV/JSON only")
                 
                 with open(temp_csv, 'w', newline='', encoding='utf-8') as csvfile:
                     writer = csv.DictWriter(
@@ -413,10 +357,12 @@ class SplunkObservableExporter:
                 expression_attribute_names = {}
                 expression_attribute_values = {}
                 
-                update_parts.append("indicator = :ind")
+                update_parts.append("#ind = :ind")
+                expression_attribute_names['#ind'] = 'indicator'
                 expression_attribute_values[':ind'] = convert_to_dynamodb_value(indicator)
                 
-                update_parts.append("indicator_type = :it")
+                update_parts.append("#it = :it")
+                expression_attribute_names['#it'] = 'indicator_type'
                 expression_attribute_values[':it'] = convert_to_dynamodb_value(indicator_type)
                 
                 update_parts.append("first_seen = :fs")
@@ -778,14 +724,9 @@ class SplunkObservableExporter:
             temp_file = Path('/tmp') / 'existing_master.parquet'
             self.s3_client.download_file(bucket, parquet_key, str(temp_file))
             
-            if PARQUET_AVAILABLE:
-                df = pd.read_parquet(temp_file)
-                data = df.to_dict('records')
-                temp_file.unlink()
-                return data
-            else:
-                logger.warning("Parquet libraries not available, cannot load existing master file")
-                return []
+            logger.warning("Parquet libraries not available, cannot load existing master file")
+            temp_file.unlink()
+            return []
         except self.s3_client.exceptions.NoSuchKey:
             logger.info("No existing master file found, creating new one")
             return []

@@ -189,11 +189,19 @@ resource "aws_iam_role_policy" "lambda_policy" {
   })
 }
 
+resource "aws_s3_object" "lambda_layer" {
+  bucket = aws_s3_bucket.observables.id
+  key    = "lambda-layer.zip"
+  source = "lambda_layer_optimized.zip"
+  etag   = filemd5("lambda_layer_optimized.zip")
+}
+
 resource "aws_lambda_layer_version" "dependencies" {
-  filename            = "lambda_layer.zip"
   layer_name          = "splunk-exporter-dependencies"
   compatible_runtimes = ["python3.11"]
-  source_code_hash    = filebase64sha256("lambda_layer.zip")
+  s3_bucket           = aws_s3_bucket.observables.id
+  s3_key              = aws_s3_object.lambda_layer.key
+  s3_object_version    = aws_s3_object.lambda_layer.version_id
 
   description = "Dependencies for Splunk observable exporter"
 }
@@ -218,7 +226,6 @@ resource "aws_lambda_function" "observable_exporter" {
       DYNAMODB_TABLE    = aws_dynamodb_table.observable_catalog.name
       LOOKBACK_DAYS     = var.lookback_days
       EXPORT_FORMAT     = "all"
-      AWS_REGION        = var.aws_region
     }
   }
 
