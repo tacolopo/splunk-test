@@ -213,27 +213,38 @@ aws dynamodb query \
 
 ### S3 + Athena - Historical Analysis
 
-**Create Athena table:**
+**Create Athena table (using Parquet format - recommended):**
 ```sql
 CREATE EXTERNAL TABLE IF NOT EXISTS observables (
+  actions STRING,
+  dest_ips STRING,
+  export_timestamp STRING,
+  first_seen STRING,
   indicator STRING,
   indicator_type STRING,
-  first_seen STRING,
   last_seen STRING,
-  total_hits BIGINT,
-  days_seen DOUBLE,
+  sourcetypes STRING,
   src_ips STRING,
-  dest_ips STRING,
+  total_hits BIGINT,
+  types STRING,
+  unique_dest_ips BIGINT,
+  unique_src_ips BIGINT,
   users STRING,
-  export_timestamp STRING
+  days_seen DOUBLE
 )
 PARTITIONED BY (date STRING)
-ROW FORMAT DELIMITED
-FIELDS TERMINATED BY ','
-STORED AS TEXTFILE
+STORED AS PARQUET
 LOCATION 's3://your-org-splunk-observables/observables/'
-TBLPROPERTIES ('skip.header.line.count'='1');
+TBLPROPERTIES ('parquet.compress'='SNAPPY');
 ```
+
+**Note:** Parquet format is recommended because:
+- Much faster query performance
+- Proper data type handling
+- Avoids CSV parsing issues with special characters
+- Better compression
+
+If you have existing CSV data and need to use CSV format, ensure the table location filters to only CSV files or use separate prefixes for CSV/JSON files.
 
 **Add partitions:**
 ```sql

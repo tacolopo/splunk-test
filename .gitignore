@@ -1,12 +1,59 @@
-config.json
-*.pyc
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Configuration files with secrets
+config.json
+terraform/terraform.tfvars
+*.tfvars
+!terraform.tfvars.example
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Lambda packages
+lambda_layer.zip
+lambda_function.zip
+terraform/lambda_layer.zip
+terraform/lambda_function.zip
+
+# Logs
 *.log
-/tmp/
+logs/
+
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
-.DS_Store
-venv/
-env/
-.venv/
+*~
 
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+test.parquet
+downloaded_*.csv
+response.json
+master.parquet
+
+# AWS
+.aws/
+
+# Temporary files
+tmp/
+temp/
+*.tmp

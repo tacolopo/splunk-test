@@ -1,6 +1,8 @@
 index=observable_catalog earliest=0 latest=now
-| stats min(strptime(first_seen,"%Y-%m-%dT%H:%M:%SZ")) as first_seen_epoch
-        max(strptime(last_seen,"%Y-%m-%dT%H:%M:%SZ")) as last_seen_epoch
+| eval first_seen_epoch=if(isnotnull(first_seen) AND first_seen!="" AND first_seen!="null", strptime(first_seen,"%Y-%m-%dT%H:%M:%SZ"), _time)
+| eval last_seen_epoch=if(isnotnull(last_seen) AND last_seen!="" AND last_seen!="null", strptime(last_seen,"%Y-%m-%dT%H:%M:%SZ"), _time)
+| stats min(first_seen_epoch) as first_seen_epoch
+        max(last_seen_epoch) as last_seen_epoch
         sum(hit_count) as total_hits
         values(indicator_type) as types
         values(src_ips) as src_ips

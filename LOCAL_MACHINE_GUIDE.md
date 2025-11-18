@@ -624,71 +624,413 @@ Copy and paste ONLY the SQL below (replace bucket name if different):
 DROP TABLE IF EXISTS splunk_observables.observables
 ```
 
-Then create the table matching your CSV format:
+Then create the table using Parquet format (recommended for Athena):
 ```
 CREATE EXTERNAL TABLE IF NOT EXISTS splunk_observables.observables (
   actions string,
   dest_ips string,
   export_timestamp string,
+  first_seen string,
   indicator string,
   indicator_type string,
+  last_seen string,
   sourcetypes string,
   src_ips string,
   total_hits bigint,
   types string,
   unique_dest_ips bigint,
   unique_src_ips bigint,
-  users string
+  users string,
+  days_seen double
+)
+PARTITIONED BY (date string)
+STORED AS PARQUET
+LOCATION 's3://splunk-observables-1763476191/observables/'
+TBLPROPERTIES ('parquet.compress'='SNAPPY')
+```
+
+**Alternative: If you need to use CSV format (not recommended), use this instead:**
+```
+CREATE EXTERNAL TABLE IF NOT EXISTS splunk_observables.observables (
+  actions string,
+  dest_ips string,
+  export_timestamp string,
+  first_seen string,
+  indicator string,
+  indicator_type string,
+  last_seen string,
+  sourcetypes string,
+  src_ips string,
+  total_hits bigint,
+  types string,
+  unique_dest_ips bigint,
+  unique_src_ips bigint,
+  users string,
+  days_seen double
 )
 PARTITIONED BY (date string)
 ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'
 WITH SERDEPROPERTIES (
   'serialization.format' = ',',
-  'field.delim' = ','
+  'field.delim' = ',',
+  'quoteChar' = '"',
+  'escapeChar' = '\\'
 )
 STORED AS INPUTFORMAT 'org.apache.hadoop.mapred.TextInputFormat'
 OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
 LOCATION 's3://splunk-observables-1763476191/observables/'
-TBLPROPERTIES ('skip.header.line.count'='1')
+TBLPROPERTIES (
+  'skip.header.line.count'='1',
+  'projection.enabled'='true',
+  'projection.date.type'='date',
+  'projection.date.range'='2024-01-01,NOW',
+  'projection.date.format'='yyyy-MM-dd',
+  'projection.date.interval'='1',
+  'projection.date.interval.unit'='DAYS',
+  'storage.location.template'='s3://splunk-observables-1763476191/observables/date=${date}/'
+)
 ```
+
+**IMPORTANT:** 
+- **Parquet format (recommended)**: Athena will automatically read only `.parquet` files, avoiding conflicts with JSON files
+- **CSV format**: If using CSV, ensure your table location only contains CSV files. JSON files in the same location will cause parsing errors. Consider using separate prefixes for CSV and JSON files.
 
 **Step 3: Add Partitions**
-Copy and paste ONLY this line:
-```
-MSCK REPAIR TABLE splunk_observables.observables
+
+**IMPORTANT:** For Parquet tables, `MSCK REPAIR TABLE` often fails. You need to add partitions manually.
+
+**Step 3a: Find your partition dates**
+First, check what dates you have in S3 (run in terminal):
+```bash
+aws s3 ls s3://splunk-observables-1763476191/observables/ | grep date=
 ```
 
-**Step 3b: Verify Partitions Were Added**
-Run this to see if partitions were discovered:
+You should see output like:
+```
+PRE date=2025-11-18/
+```
+
+**Step 3b: Add partitions manually in Athena**
+For each date folder you found, run this command in Athena (replace the date):
+```
+ALTER TABLE splunk_observables.observables ADD PARTITION (date='2025-11-18') 
+LOCATION 's3://splunk-observables-1763476191/observables/date=2025-11-18/'
+```
+
+**Example:** If you have files in `date=2025-11-18/`, run:
+```
+ALTER TABLE splunk_observables.observables ADD PARTITION (date='2025-11-18') 
+LOCATION 's3://splunk-observables-1763476191/observables/date=2025-11-18/'
+```
+
+**Step 3c: Verify Partitions Were Added**
+Run this to see if partitions were registered:
 ```
 SHOW PARTITIONS splunk_observables.observables
 ```
 
-If no partitions show up, manually add the partition:
+You should see your partition(s) listed, like:
 ```
-ALTER TABLE splunk_observables.observables ADD PARTITION (date='2025-11-18') LOCATION 's3://splunk-observables-1763476191/observables/date=2025-11-18/'
+date=2025-11-18
 ```
 
-**Step 4: Query Your Data**
-**CRITICAL: First verify partitions exist:**
+**Note:** If `MSCK REPAIR TABLE` fails (which is common with Parquet), ignore the error and use manual partition addition instead.
+
+**Step 4: Troubleshoot "No Results" Issue**
+
+**First, verify S3 files exist:**
+```bash
+# Check what files are in S3 (run in terminal, not Athena)
+aws s3 ls s3://splunk-observables-1763476191/observables/ --recursive
+```
+
+**Check 1: Verify Partitions Exist**
 ```
 SHOW PARTITIONS splunk_observables.observables
 ```
 
-If no partitions show, manually add:
+If this returns empty, partitions weren't discovered. Check your S3 structure matches:
 ```
-ALTER TABLE splunk_observables.observables ADD PARTITION (date='2025-11-18') LOCATION 's3://splunk-observables-1763476191/observables/date=2025-11-18/'
+s3://bucket/observables/date=YYYY-MM-DD/file.parquet
 ```
 
-Then check if ANY data exists (remove date filter):
+**Check 2: If Using Parquet, Verify Files Are Parquet Format**
+```bash
+# List files and check for .parquet extension
+aws s3 ls s3://splunk-observables-1763476191/observables/ --recursive | grep parquet
+```
+
+If no .parquet files exist, you need to:
+1. Re-run the export script (it now creates Parquet files)
+2. Or recreate the table to use CSV format instead
+
+**Check 3: Manually Add Partition (REQUIRED for Parquet tables)**
+
+**IMPORTANT:** `MSCK REPAIR TABLE` often fails with Parquet tables in Athena. You MUST add partitions manually.
+
+Find your actual date from S3:
+```bash
+aws s3 ls s3://splunk-observables-1763476191/observables/ | grep date=
+```
+
+You should see output like:
+```
+PRE date=2025-11-18/
+```
+
+Then add partition manually in Athena (replace DATE with actual date from above, e.g., '2025-11-18'):
+```
+ALTER TABLE splunk_observables.observables ADD PARTITION (date='2025-11-18') 
+LOCATION 's3://splunk-observables-1763476191/observables/date=2025-11-18/'
+```
+
+**For multiple dates**, add each partition separately:
+```
+ALTER TABLE splunk_observables.observables ADD PARTITION (date='2025-11-18') 
+LOCATION 's3://splunk-observables-1763476191/observables/date=2025-11-18/';
+
+ALTER TABLE splunk_observables.observables ADD PARTITION (date='2025-11-19') 
+LOCATION 's3://splunk-observables-1763476191/observables/date=2025-11-19/';
+```
+
+After adding partitions, verify they exist:
+```
+SHOW PARTITIONS splunk_observables.observables
+```
+
+You should now see your partitions listed.
+
+**Check 4: Test Query Without Date Filter**
 ```
 SELECT * FROM splunk_observables.observables LIMIT 10
 ```
 
-If still no results, check the raw S3 location:
+**Check 5: If Using Parquet But Only CSV Files Exist**
+You have two options:
+
+**Option A: Recreate table for CSV format** (use the CSV table definition from Step 2)
+
+**Option B: Re-export data to create Parquet files:**
+```bash
+python export_to_aws.py
 ```
-SELECT * FROM splunk_observables.observables WHERE date = '2025-11-18' LIMIT 10
+
+**Check 6: Verify Table Schema Matches Data**
+
+**Step 6a: Check if Parquet file has data**
+```bash
+# Download a Parquet file and inspect
+aws s3 cp s3://splunk-observables-1763476191/observables/date=2025-11-18/observables_20251118_113953.parquet ./test.parquet
+
+# Check if file has data and what columns exist
+python3 -c "
+import pandas as pd
+df = pd.read_parquet('test.parquet')
+print('Columns:', df.columns.tolist())
+print('Row count:', len(df))
+print('First few rows:')
+print(df.head())
+print('\\nData types:')
+print(df.dtypes)
+"
 ```
+
+**Step 6b: Verify table structure in Athena**
+```
+DESCRIBE splunk_observables.observables
+```
+
+**Step 6c: Check if partition was added correctly**
+```
+SHOW PARTITIONS splunk_observables.observables
+```
+
+**Step 6d: Try querying the partition directly**
+```
+SELECT * FROM splunk_observables.observables 
+WHERE date = '2025-11-18' 
+LIMIT 10
+```
+
+**Step 6e: If schema mismatch, check column order**
+The Parquet file columns must match the table definition exactly. Common issues:
+- Missing columns in Parquet file
+- Extra columns in Parquet file (these are ignored)
+- Column name case sensitivity
+- Data type mismatches
+
+**Step 6f: Try DESCRIBE on the partition**
+```
+DESCRIBE splunk_observables.observables PARTITION (date='2025-11-18')
+```
+
+**Step 6g: Check query execution details**
+Look at the "Query stats" tab in Athena to see:
+- How much data was scanned
+- Any errors or warnings
+- Execution time breakdown
+
+**Check 7: Query Specific Partition**
+```
+SELECT * FROM splunk_observables.observables 
+WHERE date = '2025-01-15' 
+LIMIT 10
+```
+
+Replace the date with an actual date from your S3 bucket.
+
+---
+
+## Advanced Troubleshooting: Schema Mismatch or Empty Files
+
+If partitions are added but queries still return no results, follow these steps:
+
+**Step 1: Download and inspect the actual Parquet file**
+```bash
+# Replace with your actual file path from S3
+aws s3 cp s3://splunk-observables-1763476191/observables/date=2025-11-18/observables_20251118_113953.parquet ./test.parquet
+
+# Check schema and data
+python3 << 'EOF'
+import pandas as pd
+import pyarrow.parquet as pq
+
+try:
+    df = pd.read_parquet('test.parquet')
+    print("=== PARQUET FILE INFO ===")
+    print(f"Rows: {len(df)}")
+    print(f"\nColumns ({len(df.columns)}):")
+    for col in df.columns:
+        print(f"  - {col} ({df[col].dtype})")
+    
+    print("\n=== FIRST ROW ===")
+    if len(df) > 0:
+        print(df.iloc[0].to_dict())
+    else:
+        print("⚠️ FILE IS EMPTY - No data rows!")
+    
+    print("\n=== PARQUET SCHEMA ===")
+    parquet_file = pq.ParquetFile('test.parquet')
+    print(parquet_file.schema)
+except Exception as e:
+    print(f"Error reading Parquet file: {e}")
+EOF
+```
+
+**Step 2: Compare with table definition**
+Run in Athena:
+```
+DESCRIBE splunk_observables.observables
+```
+
+The table expects these columns:
+- actions, dest_ips, export_timestamp, first_seen, indicator, indicator_type, last_seen, sourcetypes, src_ips, total_hits, types, unique_dest_ips, unique_src_ips, users, days_seen
+
+**Step 3: Check if file is empty**
+If the Parquet file has 0 rows, that's the problem. Check:
+- Did the export script have data? Check Splunk: `index=observable_catalog | head 10`
+- Re-run export: `python export_to_aws.py`
+
+**Step 4: If schema doesn't match, check what columns Splunk actually returns**
+The issue might be that Splunk query returns different columns than expected. Check the actual Splunk query results.
+
+**Step 5: Try a COUNT query**
+```
+SELECT COUNT(*) as row_count 
+FROM splunk_observables.observables 
+WHERE date = '2025-11-18'
+```
+
+If this returns 0, the partition exists but has no readable data.
+
+**Step 6: If COUNT works but SELECT * doesn't - Schema Mismatch Issue**
+
+If `COUNT(*)` returns a number (like 1 or 8) but `SELECT *` returns no rows, this indicates a schema mismatch. The Parquet file is missing columns that the table expects.
+
+**Solution: Query only columns that exist**
+Instead of `SELECT *`, query only the columns that are actually in your Parquet file:
+```
+SELECT actions, dest_ips, export_timestamp, indicator, indicator_type, 
+       sourcetypes, src_ips, total_hits, types, unique_dest_ips, 
+       unique_src_ips, users, date
+FROM splunk_observables.observables 
+WHERE date = '2025-11-18'
+LIMIT 10
+```
+
+**Permanent Fix: Re-export with updated code**
+The export code has been updated to always include all required columns. Re-run the export:
+```bash
+python export_to_aws.py
+```
+
+This will create new Parquet files with all columns (including `first_seen`, `last_seen`, `days_seen`), even if they're NULL.
+
+**After Re-export: Test Your Query**
+
+Since the partition already points to the folder `date=2025-11-18/`, Athena should automatically pick up the new Parquet file. Test with:
+
+```sql
+SELECT * FROM splunk_observables.observables 
+WHERE date = '2025-11-18'
+LIMIT 10
+```
+
+If you still see issues, you may need to refresh the partition metadata:
+```sql
+ALTER TABLE splunk_observables.observables DROP PARTITION (date='2025-11-18');
+ALTER TABLE splunk_observables.observables ADD PARTITION (date='2025-11-18') 
+LOCATION 's3://splunk-observables-1763476191/observables/date=2025-11-18/';
+```
+
+Then query again - `SELECT *` should now work correctly!
+
+---
+
+## Quick Diagnostic Checklist
+
+Run these commands in order to diagnose the issue:
+
+**1. Check S3 files exist:**
+```bash
+aws s3 ls s3://splunk-observables-1763476191/observables/ --recursive | head -20
+```
+
+**2. Check file formats:**
+```bash
+# Count Parquet files
+aws s3 ls s3://splunk-observables-1763476191/observables/ --recursive | grep -c parquet
+
+# Count CSV files  
+aws s3 ls s3://splunk-observables-1763476191/observables/ --recursive | grep -c csv
+```
+
+**3. Check partition structure:**
+```bash
+# Should show folders like: date=2025-01-15/
+aws s3 ls s3://splunk-observables-1763476191/observables/ | grep date=
+```
+
+**4. In Athena, check partitions:**
+```
+SHOW PARTITIONS splunk_observables.observables
+```
+
+**5. If partitions exist but no data, check table format matches files:**
+- If table is `STORED AS PARQUET` but you only have CSV files → Recreate table for CSV OR re-export to create Parquet
+- If table is `STORED AS TEXTFILE` but you have Parquet files → Recreate table for Parquet OR re-export to create CSV
+
+**6. Test with a simple query:**
+```
+SELECT COUNT(*) as row_count FROM splunk_observables.observables
+```
+
+If this returns 0, the issue is likely:
+- No partitions registered (run `MSCK REPAIR TABLE` or add manually)
+- Format mismatch (Parquet table reading CSV files or vice versa)
+- Wrong S3 location in table definition
+
+---
 
 Then query specific IPs:
 Now you can run queries like (copy ONLY the SQL, not the "sql" marker):

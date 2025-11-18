@@ -12,6 +12,14 @@ from pathlib import Path
 import argparse
 
 try:
+    import pandas as pd
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    PARQUET_AVAILABLE = True
+except ImportError:
+    PARQUET_AVAILABLE = False
+
+try:
     import splunklib.client as client
     import splunklib.results as results
 except ImportError:
@@ -156,7 +164,7 @@ class SplunkObservableExporter:
             logger.error(f"Error executing Splunk search: {e}")
             raise
     
-    def export_to_s3(self, data: List[Dict], date_prefix: str):
+    def export_to_s3(self, data: List[Dict], date_prefix: str = None, master_file: bool = True):
         if not self.s3_client:
             logger.warning("S3 client not configured, skipping S3 export")
             return
@@ -164,13 +172,31 @@ class SplunkObservableExporter:
         bucket = self.config['aws']['s3_bucket']
         s3_prefix = self.config['aws'].get('s3_prefix', 'observables')
         
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        
-        csv_key = f"{s3_prefix}/date={date_prefix}/observables_{timestamp}.csv"
-        json_key = f"{s3_prefix}/date={date_prefix}/observables_{timestamp}.json"
-        
-        temp_csv = Path('/tmp') / f"observables_{timestamp}.csv"
-        temp_json = Path('/tmp') / f"observables_{timestamp}.json"
+        if master_file:
+            parquet_key = f"{s3_prefix}/master.parquet"
+            csv_key = f"{s3_prefix}/master.csv"
+            json_key = f"{s3_prefix}/master.json"
+            
+            temp_parquet = Path('/tmp') / "observables_master.parquet"
+            temp_csv = Path('/tmp') / "observables_master.csv"
+            temp_json = Path('/tmp') / "observables_master.json"
+            
+            existing_master_data = self._load_existing_master_file(bucket, parquet_key)
+            if existing_master_data:
+                logger.info(f"Found existing master file with {len(existing_master_data)} records, merging...")
+                data = self._merge_master_data(existing_master_data, data)
+                logger.info(f"After merge: {len(data)} total records")
+        else:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            date_prefix = date_prefix or datetime.now().strftime('%Y-%m-%d')
+            
+            parquet_key = f"{s3_prefix}/date={date_prefix}/observables_{timestamp}.parquet"
+            csv_key = f"{s3_prefix}/date={date_prefix}/observables_{timestamp}.csv"
+            json_key = f"{s3_prefix}/date={date_prefix}/observables_{timestamp}.json"
+            
+            temp_parquet = Path('/tmp') / f"observables_{timestamp}.parquet"
+            temp_csv = Path('/tmp') / f"observables_{timestamp}.csv"
+            temp_json = Path('/tmp') / f"observables_{timestamp}.json"
         
         try:
             if data:
@@ -179,26 +205,94 @@ class SplunkObservableExporter:
                     fieldnames.update(row.keys())
                 fieldnames = sorted(list(fieldnames))
                 
+                if PARQUET_AVAILABLE:
+                    required_columns = ['actions', 'dest_ips', 'export_timestamp', 'first_seen', 
+                                       'indicator', 'indicator_type', 'last_seen', 'sourcetypes', 
+                                       'src_ips', 'total_hits', 'types', 'unique_dest_ips', 
+                                       'unique_src_ips', 'users', 'days_seen']
+                    
+                    df_data = []
+                    for row in data:
+                        cleaned_row = {}
+                        for k in fieldnames:
+                            v = row.get(k)
+                            if v is None:
+                                cleaned_row[k] = None
+                            elif isinstance(v, list):
+                                cleaned_row[k] = '|'.join(str(x) for x in v if x is not None) if v else None
+                            else:
+                                cleaned_row[k] = v
+                        df_data.append(cleaned_row)
+                    
+                    df = pd.DataFrame(df_data, columns=fieldnames)
+                    
+                    for col in required_columns:
+                        if col not in df.columns:
+                            df[col] = None
+                            logger.warning(f"Missing column {col} in data, adding as NULL")
+                    
+                    type_mapping = {}
+                    for col in df.columns:
+                        if col in ['total_hits', 'unique_src_ips', 'unique_dest_ips']:
+                            type_mapping[col] = 'Int64'
+                        elif col in ['days_seen']:
+                            type_mapping[col] = 'float64'
+                        else:
+                            type_mapping[col] = 'string'
+                    
+                    for col, dtype in type_mapping.items():
+                        if col in df.columns:
+                            if dtype == 'Int64':
+                                df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
+                            elif dtype == 'float64':
+                                df[col] = pd.to_numeric(df[col], errors='coerce').astype('float64')
+                            else:
+                                df[col] = df[col].astype('string')
+                    
+                    table = pa.Table.from_pandas(df)
+                    pq.write_table(table, str(temp_parquet), compression='snappy')
+                    self.s3_client.upload_file(str(temp_parquet), bucket, parquet_key)
+                    if master_file:
+                        logger.info(f"Uploaded master Parquet file to s3://{bucket}/{parquet_key} ({len(df)} records)")
+                    else:
+                        logger.info(f"Uploaded Parquet to s3://{bucket}/{parquet_key}")
+                else:
+                    logger.warning("Parquet libraries not available, skipping Parquet export")
+                
                 with open(temp_csv, 'w', newline='', encoding='utf-8') as csvfile:
-                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
+                    writer = csv.DictWriter(
+                        csvfile, 
+                        fieldnames=fieldnames, 
+                        extrasaction='ignore',
+                        quoting=csv.QUOTE_ALL,
+                        escapechar='\\'
+                    )
                     writer.writeheader()
                     for row in data:
                         cleaned_row = {}
                         for k, v in row.items():
-                            if isinstance(v, list):
-                                cleaned_row[k] = '|'.join(str(x) for x in v)
+                            if v is None:
+                                cleaned_row[k] = ''
+                            elif isinstance(v, list):
+                                cleaned_row[k] = '|'.join(str(x) for x in v if x is not None)
                             else:
-                                cleaned_row[k] = v
+                                cleaned_row[k] = str(v) if v is not None else ''
                         writer.writerow(cleaned_row)
+                
+                self.s3_client.upload_file(str(temp_csv), bucket, csv_key)
+                if master_file:
+                    logger.info(f"Uploaded master CSV file to s3://{bucket}/{csv_key}")
+                else:
+                    logger.info(f"Uploaded CSV to s3://{bucket}/{csv_key}")
                 
                 with open(temp_json, 'w', encoding='utf-8') as jsonfile:
                     json.dump(data, jsonfile, indent=2, ensure_ascii=False)
                 
-                self.s3_client.upload_file(str(temp_csv), bucket, csv_key)
-                logger.info(f"Uploaded CSV to s3://{bucket}/{csv_key}")
-                
                 self.s3_client.upload_file(str(temp_json), bucket, json_key)
-                logger.info(f"Uploaded JSON to s3://{bucket}/{json_key}")
+                if master_file:
+                    logger.info(f"Uploaded master JSON file to s3://{bucket}/{json_key}")
+                else:
+                    logger.info(f"Uploaded JSON to s3://{bucket}/{json_key}")
             else:
                 logger.warning("No data to export to S3")
                 
@@ -206,6 +300,8 @@ class SplunkObservableExporter:
             logger.error(f"Error exporting to S3: {e}")
             raise
         finally:
+            if temp_parquet.exists():
+                temp_parquet.unlink()
             if temp_csv.exists():
                 temp_csv.unlink()
             if temp_json.exists():
@@ -242,33 +338,98 @@ class SplunkObservableExporter:
                     else:
                         return {'S': str(value)}
                 
+                def parse_iso_timestamp(ts_str):
+                    try:
+                        if ts_str and ts_str != '':
+                            return datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+                    except:
+                        pass
+                    return None
+                
+                existing_item = None
+                try:
+                    response = self.dynamodb_client.get_item(
+                        TableName=table_name,
+                        Key={'indicator_key': {'S': composite_key}}
+                    )
+                    if 'Item' in response:
+                        existing_item = response['Item']
+                except Exception as e:
+                    logger.warning(f"Could not read existing item {composite_key}: {e}")
+                
+                new_first_seen = item.get('first_seen', '')
+                new_last_seen = item.get('last_seen', '')
+                new_total_hits = int(item.get('total_hits', 0))
+                
+                if existing_item:
+                    existing_first_seen = existing_item.get('first_seen', {}).get('S', '')
+                    existing_last_seen = existing_item.get('last_seen', {}).get('S', '')
+                    existing_total_hits = int(existing_item.get('total_hits', {}).get('N', '0'))
+                    
+                    existing_first_ts = parse_iso_timestamp(existing_first_seen)
+                    existing_last_ts = parse_iso_timestamp(existing_last_seen)
+                    new_first_ts = parse_iso_timestamp(new_first_seen)
+                    new_last_ts = parse_iso_timestamp(new_last_seen)
+                    
+                    if existing_first_ts and new_first_ts:
+                        final_first_seen = min(existing_first_ts, new_first_ts).isoformat().replace('+00:00', 'Z')
+                    elif existing_first_ts:
+                        final_first_seen = existing_first_seen
+                    elif new_first_ts:
+                        final_first_seen = new_first_seen
+                    else:
+                        final_first_seen = datetime.now().isoformat() + 'Z'
+                    
+                    if existing_last_ts and new_last_ts:
+                        final_last_seen = max(existing_last_ts, new_last_ts).isoformat().replace('+00:00', 'Z')
+                    elif existing_last_ts:
+                        final_last_seen = existing_last_seen
+                    elif new_last_ts:
+                        final_last_seen = new_last_seen
+                    else:
+                        final_last_seen = datetime.now().isoformat() + 'Z'
+                    
+                    final_total_hits = existing_total_hits + new_total_hits
+                    
+                    final_first_ts = parse_iso_timestamp(final_first_seen)
+                    final_last_ts = parse_iso_timestamp(final_last_seen)
+                    if final_first_ts and final_last_ts:
+                        days_seen = round((final_last_ts - final_first_ts).total_seconds() / 86400, 2)
+                    else:
+                        days_seen = 0
+                else:
+                    final_first_seen = new_first_seen if new_first_seen else datetime.now().isoformat() + 'Z'
+                    final_last_seen = new_last_seen if new_last_seen else datetime.now().isoformat() + 'Z'
+                    final_total_hits = new_total_hits
+                    
+                    final_first_ts = parse_iso_timestamp(final_first_seen)
+                    final_last_ts = parse_iso_timestamp(final_last_seen)
+                    if final_first_ts and final_last_ts:
+                        days_seen = round((final_last_ts - final_first_ts).total_seconds() / 86400, 2)
+                    else:
+                        days_seen = item.get('days_seen', 0)
+                
                 update_parts = []
                 expression_attribute_names = {}
                 expression_attribute_values = {}
                 
-                # GSI keys: indicator_type and last_seen must ALWAYS be set and non-empty
-                # Ensure indicator_type is set
+                update_parts.append("indicator = :ind")
+                expression_attribute_values[':ind'] = convert_to_dynamodb_value(indicator)
+                
                 update_parts.append("indicator_type = :it")
                 expression_attribute_values[':it'] = convert_to_dynamodb_value(indicator_type)
                 
-                # Ensure last_seen is set (required for GSI)
-                last_seen_val = item.get('last_seen', '')
-                if not last_seen_val or last_seen_val == '':
-                    last_seen_val = item.get('first_seen', datetime.now().isoformat() + 'Z')
-                ls_val = convert_to_dynamodb_value(last_seen_val)
-                if not ls_val:
-                    # Fallback to current time if still empty
-                    ls_val = convert_to_dynamodb_value(datetime.now().isoformat() + 'Z')
-                update_parts.append("last_seen = :ls")
-                expression_attribute_values[':ls'] = ls_val
+                update_parts.append("first_seen = :fs")
+                expression_attribute_values[':fs'] = convert_to_dynamodb_value(final_first_seen)
                 
-                fs_val = convert_to_dynamodb_value(item.get('first_seen', ''))
-                if fs_val:
-                    update_parts.append("first_seen = :fs")
-                    expression_attribute_values[':fs'] = fs_val
+                update_parts.append("last_seen = :ls")
+                expression_attribute_values[':ls'] = convert_to_dynamodb_value(final_last_seen)
                 
                 update_parts.append("total_hits = :th")
-                expression_attribute_values[':th'] = convert_to_dynamodb_value(int(item.get('total_hits', 0)))
+                expression_attribute_values[':th'] = convert_to_dynamodb_value(final_total_hits)
+                
+                update_parts.append("days_seen = :ds")
+                expression_attribute_values[':ds'] = convert_to_dynamodb_value(float(days_seen))
                 
                 if 'types' in item and item['types']:
                     ts_val = convert_to_dynamodb_value(item.get('types', []))
@@ -310,9 +471,6 @@ class SplunkObservableExporter:
                         expression_attribute_names['#acts'] = 'actions'
                         expression_attribute_values[':acts'] = acts_val
                 
-                if 'days_seen' in item and item.get('days_seen') is not None:
-                    update_parts.append("days_seen = :ds")
-                    expression_attribute_values[':ds'] = convert_to_dynamodb_value(float(item.get('days_seen', 0)))
                 
                 update_parts.append("export_timestamp = :et")
                 expression_attribute_values[':et'] = convert_to_dynamodb_value(datetime.now().isoformat() + 'Z')
@@ -485,11 +643,23 @@ class SplunkObservableExporter:
             
             date_prefix = datetime.now().strftime('%Y-%m-%d')
             
-            if export_format in ['all', 's3']:
-                self.export_to_s3(data, date_prefix)
-            
             if export_format in ['all', 'dynamodb']:
                 self.export_to_dynamodb(data)
+            
+            if export_format in ['all', 's3']:
+                if export_format == 'all':
+                    should_update_s3 = self._should_update_s3_master_file()
+                    if should_update_s3:
+                        s3_data = self.get_merged_data_from_dynamodb()
+                        if s3_data:
+                            self.export_to_s3(s3_data, master_file=True)
+                            logger.info("S3 master file updated with merged DynamoDB data")
+                        else:
+                            logger.warning("No DynamoDB data available for S3 master file")
+                    else:
+                        logger.info("S3 master file already updated today, skipping")
+                else:
+                    self.export_to_s3(data, date_prefix, master_file=False)
             
             if export_format in ['all', 'rds']:
                 self.export_to_rds_postgres(data)
@@ -499,6 +669,228 @@ class SplunkObservableExporter:
         except Exception as e:
             logger.error(f"Export failed: {e}")
             raise
+    
+    def get_merged_data_from_dynamodb(self) -> List[Dict]:
+        if not self.dynamodb_client:
+            logger.warning("DynamoDB client not configured, using Splunk data for S3")
+            return []
+        
+        table_name = self.config['aws']['dynamodb_table']
+        logger.info("Reading all merged data from DynamoDB for S3 lifetime master file")
+        
+        try:
+            merged_data = []
+            last_evaluated_key = None
+            total_scanned = 0
+            
+            while True:
+                scan_kwargs = {
+                    'TableName': table_name,
+                    'Limit': 100
+                }
+                if last_evaluated_key:
+                    scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+                
+                response = self.dynamodb_client.scan(**scan_kwargs)
+                total_scanned += response.get('ScannedCount', 0)
+                
+                for item in response.get('Items', []):
+                    indicator_key = item.get('indicator_key', {}).get('S', '')
+                    indicator = item.get('indicator', {}).get('S', '')
+                    indicator_type = item.get('indicator_type', {}).get('S', '')
+                    first_seen = item.get('first_seen', {}).get('S', '')
+                    last_seen = item.get('last_seen', {}).get('S', '')
+                    total_hits = item.get('total_hits', {}).get('N', '0')
+                    days_seen = item.get('days_seen', {}).get('N', '0')
+                    
+                    def get_string_set(key):
+                        val = item.get(key, {})
+                        if 'SS' in val:
+                            return val['SS']
+                        elif 'S' in val:
+                            return [val['S']]
+                        return []
+                    
+                    merged_item = {
+                        'indicator': indicator,
+                        'indicator_type': indicator_type,
+                        'first_seen': first_seen,
+                        'last_seen': last_seen,
+                        'total_hits': int(total_hits),
+                        'days_seen': float(days_seen) if days_seen else 0.0,
+                        'src_ips': get_string_set('src_ips'),
+                        'dest_ips': get_string_set('dest_ips'),
+                        'users': get_string_set('users'),
+                        'sourcetypes': get_string_set('sourcetypes'),
+                        'actions': get_string_set('actions'),
+                        'types': get_string_set('types'),
+                        'unique_src_ips': int(item.get('unique_src_ips', {}).get('N', '0')),
+                        'unique_dest_ips': int(item.get('unique_dest_ips', {}).get('N', '0')),
+                        'export_timestamp': datetime.now().isoformat() + 'Z'
+                    }
+                    merged_data.append(merged_item)
+                
+                last_evaluated_key = response.get('LastEvaluatedKey')
+                if not last_evaluated_key:
+                    break
+            
+            logger.info(f"Retrieved {len(merged_data)} lifetime records from DynamoDB (scanned {total_scanned} items)")
+            return merged_data
+            
+        except Exception as e:
+            logger.error(f"Error reading from DynamoDB for S3 export: {e}")
+            logger.warning("Falling back to Splunk data for S3 export")
+            return []
+    
+    def _should_update_s3_master_file(self) -> bool:
+        if not self.s3_client:
+            return False
+        
+        bucket = self.config['aws']['s3_bucket']
+        s3_prefix = self.config['aws'].get('s3_prefix', 'observables')
+        parquet_key = f"{s3_prefix}/master.parquet"
+        
+        try:
+            response = self.s3_client.head_object(Bucket=bucket, Key=parquet_key)
+            last_modified = response.get('LastModified')
+            
+            if last_modified:
+                last_modified_date = last_modified.date()
+                today = datetime.now().date()
+                
+                if last_modified_date == today:
+                    logger.info(f"S3 master file was last updated today ({last_modified_date}), skipping update")
+                    return False
+                else:
+                    logger.info(f"S3 master file last updated on {last_modified_date}, updating now")
+                    return True
+            else:
+                return True
+        except self.s3_client.exceptions.NoSuchKey:
+            logger.info("S3 master file does not exist, will create it")
+            return True
+        except Exception as e:
+            logger.warning(f"Could not check S3 master file status: {e}, will attempt update")
+            return True
+    
+    def _load_existing_master_file(self, bucket: str, parquet_key: str) -> List[Dict]:
+        try:
+            temp_file = Path('/tmp') / 'existing_master.parquet'
+            self.s3_client.download_file(bucket, parquet_key, str(temp_file))
+            
+            if PARQUET_AVAILABLE:
+                df = pd.read_parquet(temp_file)
+                data = df.to_dict('records')
+                temp_file.unlink()
+                return data
+            else:
+                logger.warning("Parquet libraries not available, cannot load existing master file")
+                return []
+        except self.s3_client.exceptions.NoSuchKey:
+            logger.info("No existing master file found, creating new one")
+            return []
+        except Exception as e:
+            logger.warning(f"Could not load existing master file: {e}, creating new one")
+            return []
+    
+    def _merge_master_data(self, existing_data: List[Dict], new_data: List[Dict]) -> List[Dict]:
+        def parse_iso_timestamp(ts_str):
+            try:
+                if ts_str and ts_str != '' and ts_str != 'None':
+                    return datetime.fromisoformat(str(ts_str).replace('Z', '+00:00'))
+            except:
+                pass
+            return None
+        
+        existing_dict = {}
+        for item in existing_data:
+            indicator = item.get('indicator', '')
+            indicator_type = item.get('indicator_type', '')
+            if indicator and indicator_type:
+                key = f"{indicator_type}#{indicator}"
+                existing_dict[key] = item
+        
+        merged_dict = existing_dict.copy()
+        
+        for new_item in new_data:
+            indicator = new_item.get('indicator', '')
+            indicator_type = new_item.get('indicator_type', '')
+            if not indicator or not indicator_type:
+                continue
+            
+            key = f"{indicator_type}#{indicator}"
+            
+            if key in merged_dict:
+                existing = merged_dict[key]
+                
+                existing_first_seen = existing.get('first_seen', '')
+                existing_last_seen = existing.get('last_seen', '')
+                existing_total_hits = int(existing.get('total_hits', 0))
+                
+                new_first_seen = new_item.get('first_seen', '')
+                new_last_seen = new_item.get('last_seen', '')
+                new_total_hits = int(new_item.get('total_hits', 0))
+                
+                existing_first_ts = parse_iso_timestamp(existing_first_seen)
+                existing_last_ts = parse_iso_timestamp(existing_last_seen)
+                new_first_ts = parse_iso_timestamp(new_first_seen)
+                new_last_ts = parse_iso_timestamp(new_last_seen)
+                
+                if existing_first_ts and new_first_ts:
+                    final_first_seen = min(existing_first_ts, new_first_ts).isoformat().replace('+00:00', 'Z')
+                elif existing_first_ts:
+                    final_first_seen = existing_first_seen
+                elif new_first_ts:
+                    final_first_seen = new_first_seen
+                else:
+                    final_first_seen = datetime.now().isoformat() + 'Z'
+                
+                if existing_last_ts and new_last_ts:
+                    final_last_seen = max(existing_last_ts, new_last_ts).isoformat().replace('+00:00', 'Z')
+                elif existing_last_ts:
+                    final_last_seen = existing_last_seen
+                elif new_last_ts:
+                    final_last_seen = new_last_seen
+                else:
+                    final_last_seen = datetime.now().isoformat() + 'Z'
+                
+                final_total_hits = existing_total_hits + new_total_hits
+                
+                final_first_ts = parse_iso_timestamp(final_first_seen)
+                final_last_ts = parse_iso_timestamp(final_last_seen)
+                if final_first_ts and final_last_ts:
+                    days_seen = round((final_last_ts - final_first_ts).total_seconds() / 86400, 2)
+                else:
+                    days_seen = existing.get('days_seen', 0)
+                
+                def merge_lists(existing_val, new_val):
+                    existing_list = existing_val if isinstance(existing_val, list) else ([existing_val] if existing_val else [])
+                    new_list = new_val if isinstance(new_val, list) else ([new_val] if new_val else [])
+                    combined = list(set(existing_list + new_list))
+                    return combined if combined else []
+                
+                merged_dict[key] = {
+                    'indicator': indicator,
+                    'indicator_type': indicator_type,
+                    'first_seen': final_first_seen,
+                    'last_seen': final_last_seen,
+                    'total_hits': final_total_hits,
+                    'days_seen': days_seen,
+                    'src_ips': merge_lists(existing.get('src_ips', []), new_item.get('src_ips', [])),
+                    'dest_ips': merge_lists(existing.get('dest_ips', []), new_item.get('dest_ips', [])),
+                    'users': merge_lists(existing.get('users', []), new_item.get('users', [])),
+                    'sourcetypes': merge_lists(existing.get('sourcetypes', []), new_item.get('sourcetypes', [])),
+                    'actions': merge_lists(existing.get('actions', []), new_item.get('actions', [])),
+                    'types': merge_lists(existing.get('types', []), new_item.get('types', [])),
+                    'unique_src_ips': max(int(existing.get('unique_src_ips', 0)), int(new_item.get('unique_src_ips', 0))),
+                    'unique_dest_ips': max(int(existing.get('unique_dest_ips', 0)), int(new_item.get('unique_dest_ips', 0))),
+                    'export_timestamp': datetime.now().isoformat() + 'Z'
+                }
+            else:
+                merged_dict[key] = new_item.copy()
+                merged_dict[key]['export_timestamp'] = datetime.now().isoformat() + 'Z'
+        
+        return list(merged_dict.values())
 
 
 def load_config(config_path: str) -> Dict:

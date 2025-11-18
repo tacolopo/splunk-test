@@ -2,6 +2,8 @@
 
 This directory contains Terraform configuration for deploying the complete Splunk observable catalog infrastructure.
 
+**📖 For complete production deployment instructions, see [PRODUCTION_DEPLOYMENT.md](../PRODUCTION_DEPLOYMENT.md)**
+
 ## What Gets Deployed
 
 ### Storage
