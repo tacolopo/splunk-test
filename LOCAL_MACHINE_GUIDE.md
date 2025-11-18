@@ -271,15 +271,32 @@ cat > sample_logs.json << 'EOF'
 {"_time": "2024-01-15T10:35:00", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "action": "web_request"}
 EOF
 
-# Copy file into Splunk container
-docker cp sample_logs.json splunk:/opt/splunk/sample_logs.json
+# Method 1: Add data via Splunk Web UI (Recommended - easiest)
+# 1. Open Splunk: http://localhost:8000
+# 2. Login: admin / Changeme123!
+# 3. Click "Add Data" (top right) or Settings → Add Data
+# 4. Select "Upload" → Choose Files
+# 5. Select sample_logs.json
+# 6. Set sourcetype to: _json
+# 7. Set index to: main
+# 8. Click "Review" → "Submit"
 
-# Index the data in Splunk
-# IMPORTANT: Do NOT use sudo with docker exec - it causes permission errors
-docker exec splunk /opt/splunk/bin/splunk add oneshot /opt/splunk/sample_logs.json \
-  -sourcetype _json \
-  -index main \
-  -auth admin:Changeme123!
+# Method 2: Add data via REST API (Alternative)
+# Copy file into container first
+docker cp sample_logs.json splunk:/tmp/sample_logs.json
+
+# Use Splunk REST API to index the data
+curl -k -u admin:Changeme123! \
+  https://localhost:8089/services/data/inputs/oneshot \
+  -d name=/tmp/sample_logs.json \
+  -d sourcetype=_json \
+  -d index=main
+
+# Method 3: Use docker exec (if permissions work)
+# docker exec -u splunk splunk /opt/splunk/bin/splunk add oneshot /tmp/sample_logs.json \
+#   -sourcetype _json \
+#   -index main \
+#   -auth admin:Changeme123!
 ```
 
 ---
