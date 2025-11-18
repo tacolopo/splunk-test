@@ -116,8 +116,11 @@ class SplunkObservableExporter:
     
     def execute_splunk_search(self, query: str, lookback_days: int = 1) -> List[Dict]:
         query = query.replace('$lookback$', str(lookback_days))
+        # Clean up query - remove any leading/trailing whitespace and ensure proper formatting
+        query = query.strip()
         
         logger.info(f"Executing Splunk search (lookback: {lookback_days} days)")
+        logger.debug(f"Query: {query[:200]}...")  # Log first 200 chars for debugging
         
         try:
             job = self.splunk_client.jobs.create(query, **{
