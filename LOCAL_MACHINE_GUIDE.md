@@ -401,15 +401,24 @@ Copy the entire output and paste into Splunk search box.
    ```
    This shows all fields in your data. Verify you see: `src_ip`, `dest_ip`, `email`, `hash`, `user_agent`
 
-4. **If fields exist, test a simpler version:**
+4. **Test with explicit JSON extraction:**
    ```
-   index=main
+   index=main sourcetype=_json
+   | spath
+   | head 10
+   ```
+   The `spath` command extracts JSON fields. After running this, check if you see `src_ip`, `dest_ip`, `email`, `hash` fields.
+
+5. **If spath works, test the indicator extraction:**
+   ```
+   index=main sourcetype=_json
+   | spath
    | eval indicator_type=if(isnotnull(src_ip) OR isnotnull(dest_ip), "ip", if(isnotnull(email), "email", if(isnotnull(hash), "hash", "other")))
-   | eval indicator=coalesce(src_ip, dest_ip, email, hash)
+   | eval indicator=coalesce(dest_ip, src_ip, email, hash)
    | where isnotnull(indicator) AND indicator!=""
    | head 10
    ```
-   This should show at least some results if fields are extracted correctly.
+   This should show results if JSON extraction works.
 
 5. **Run the full query:**
    - Use the test query: `cat splunk_queries/observable_catalog_test.spl`
