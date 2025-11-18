@@ -17,4 +17,3 @@ index=observable_catalog earliest=-$lookback$@d latest=@d
       export_timestamp=strftime(now(),"%Y-%m-%dT%H:%M:%SZ")
 | fields - first_seen_epoch last_seen_epoch
 | sort indicator_type indicator
-
