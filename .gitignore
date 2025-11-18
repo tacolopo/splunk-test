@@ -1,0 +1,12 @@
+config.json
+*.pyc
+__pycache__/
+*.log
+/tmp/
+*.swp
+*.swo
+.DS_Store
+venv/
+env/
+.venv/
+

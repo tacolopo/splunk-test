@@ -1,0 +1,20 @@
+index=observable_catalog earliest=-$lookback$@d latest=@d
+| stats min(strptime(first_seen,"%Y-%m-%dT%H:%M:%SZ")) as first_seen_epoch
+        max(strptime(last_seen,"%Y-%m-%dT%H:%M:%SZ")) as last_seen_epoch
+        sum(hit_count) as total_hits
+        values(indicator_type) as types
+        values(src_ips) as src_ips
+        values(dest_ips) as dest_ips
+        values(users) as users
+        values(sourcetypes) as sourcetypes
+        values(actions) as actions
+        max(unique_src_ips) as unique_src_ips
+        max(unique_dest_ips) as unique_dest_ips
+  by indicator indicator_type
+| eval first_seen=strftime(first_seen_epoch,"%Y-%m-%dT%H:%M:%SZ"),
+      last_seen=strftime(last_seen_epoch,"%Y-%m-%dT%H:%M:%SZ"),
+      days_seen=round((last_seen_epoch-first_seen_epoch)/86400, 2),
+      export_timestamp=strftime(now(),"%Y-%m-%dT%H:%M:%SZ")
+| fields - first_seen_epoch last_seen_epoch
+| sort indicator_type indicator
+

@@ -1,0 +1,38 @@
+index=proxy OR index=email OR index=edr OR index=web OR index=firewall earliest=-1h@h latest=@h
+| eval indicator_type=case(
+    isnotnull(dest_ip) OR isnotnull(src_ip), "ip",
+    isnotnull(user_agent) AND user_agent!="", "ua",
+    match(email, ".+@.+\\..+"), "email",
+    match(hash, "^[A-Fa-f0-9]{32}$"), "md5",
+    match(hash, "^[A-Fa-f0-9]{40}$"), "sha1",
+    match(hash, "^[A-Fa-f0-9]{64}$"), "sha256",
+    isnotnull(domain) AND domain!="", "domain",
+    1=1, "other"
+  )
+| eval indicator=case(
+    indicator_type="ip", coalesce(dest_ip, src_ip),
+    indicator_type="email", email,
+    indicator_type="ua", user_agent,
+    indicator_type="md5", hash,
+    indicator_type="sha1", hash,
+    indicator_type="sha256", hash,
+    indicator_type="domain", domain,
+    true(), null()
+  )
+| where isnotnull(indicator) AND indicator!=""
+| stats earliest(_time) as first_seen
+        latest(_time) as last_seen
+        count as hit_count
+        values(src_ip) as src_ips
+        values(dest_ip) as dest_ips
+        values(user) as users
+        values(sourcetype) as sourcetypes
+        values(action) as actions
+        dc(src_ip) as unique_src_ips
+        dc(dest_ip) as unique_dest_ips
+  by indicator indicator_type
+| eval first_seen=strftime(first_seen,"%Y-%m-%dT%H:%M:%SZ"),
+      last_seen=strftime(last_seen,"%Y-%m-%dT%H:%M:%SZ"),
+      catalog_timestamp=strftime(now(),"%Y-%m-%dT%H:%M:%SZ")
+| collect index=observable_catalog sourcetype=observable_summary
+
