@@ -246,31 +246,69 @@ class SplunkObservableExporter:
                 expression_attribute_names = {}
                 expression_attribute_values = {}
                 
-                update_parts.append("first_seen = :fs")
-                expression_attribute_values[':fs'] = convert_to_dynamodb_value(item.get('first_seen', ''))
+                # GSI keys: indicator_type and last_seen must ALWAYS be set and non-empty
+                # Ensure indicator_type is set
+                update_parts.append("indicator_type = :it")
+                expression_attribute_values[':it'] = convert_to_dynamodb_value(indicator_type)
                 
+                # Ensure last_seen is set (required for GSI)
+                last_seen_val = item.get('last_seen', '')
+                if not last_seen_val or last_seen_val == '':
+                    last_seen_val = item.get('first_seen', datetime.now().isoformat() + 'Z')
+                ls_val = convert_to_dynamodb_value(last_seen_val)
+                if not ls_val:
+                    # Fallback to current time if still empty
+                    ls_val = convert_to_dynamodb_value(datetime.now().isoformat() + 'Z')
                 update_parts.append("last_seen = :ls")
-                expression_attribute_values[':ls'] = convert_to_dynamodb_value(item.get('last_seen', ''))
+                expression_attribute_values[':ls'] = ls_val
+                
+                fs_val = convert_to_dynamodb_value(item.get('first_seen', ''))
+                if fs_val:
+                    update_parts.append("first_seen = :fs")
+                    expression_attribute_values[':fs'] = fs_val
                 
                 update_parts.append("total_hits = :th")
                 expression_attribute_values[':th'] = convert_to_dynamodb_value(int(item.get('total_hits', 0)))
                 
                 if 'types' in item and item['types']:
-                    update_parts.append("#ts = :ts")
-                    expression_attribute_names['#ts'] = 'types'
-                    expression_attribute_values[':ts'] = convert_to_dynamodb_value(item.get('types', []))
+                    ts_val = convert_to_dynamodb_value(item.get('types', []))
+                    if ts_val:
+                        update_parts.append("#ts = :ts")
+                        expression_attribute_names['#ts'] = 'types'
+                        expression_attribute_values[':ts'] = ts_val
                 
                 if 'src_ips' in item and item['src_ips']:
-                    update_parts.append("src_ips = :sip")
-                    expression_attribute_values[':sip'] = convert_to_dynamodb_value(item.get('src_ips', []))
+                    sip_val = convert_to_dynamodb_value(item.get('src_ips', []))
+                    if sip_val:
+                        update_parts.append("src_ips = :sip")
+                        expression_attribute_values[':sip'] = sip_val
                 
                 if 'dest_ips' in item and item['dest_ips']:
-                    update_parts.append("dest_ips = :dip")
-                    expression_attribute_values[':dip'] = convert_to_dynamodb_value(item.get('dest_ips', []))
+                    dip_val = convert_to_dynamodb_value(item.get('dest_ips', []))
+                    if dip_val:
+                        update_parts.append("dest_ips = :dip")
+                        expression_attribute_values[':dip'] = dip_val
                 
                 if 'users' in item and item['users']:
-                    update_parts.append("users = :usr")
-                    expression_attribute_values[':usr'] = convert_to_dynamodb_value(item.get('users', []))
+                    usr_val = convert_to_dynamodb_value(item.get('users', []))
+                    if usr_val:
+                        update_parts.append("#usrs = :usr")
+                        expression_attribute_names['#usrs'] = 'users'
+                        expression_attribute_values[':usr'] = usr_val
+                
+                if 'sourcetypes' in item and item['sourcetypes']:
+                    st_val = convert_to_dynamodb_value(item.get('sourcetypes', []))
+                    if st_val:
+                        update_parts.append("#st = :st")
+                        expression_attribute_names['#st'] = 'sourcetypes'
+                        expression_attribute_values[':st'] = st_val
+                
+                if 'actions' in item and item['actions']:
+                    acts_val = convert_to_dynamodb_value(item.get('actions', []))
+                    if acts_val:
+                        update_parts.append("#acts = :acts")
+                        expression_attribute_names['#acts'] = 'actions'
+                        expression_attribute_values[':acts'] = acts_val
                 
                 if 'days_seen' in item and item.get('days_seen') is not None:
                     update_parts.append("days_seen = :ds")
@@ -281,7 +319,8 @@ class SplunkObservableExporter:
                 
                 ttl_days = int(os.getenv('DYNAMODB_TTL_DAYS', '90'))
                 ttl_timestamp = int((datetime.now().timestamp() + (ttl_days * 86400)))
-                update_parts.append("ttl = :ttl")
+                update_parts.append("#ttl = :ttl")
+                expression_attribute_names['#ttl'] = 'ttl'
                 expression_attribute_values[':ttl'] = convert_to_dynamodb_value(ttl_timestamp)
                 
                 update_expression = "SET " + ", ".join(update_parts)
