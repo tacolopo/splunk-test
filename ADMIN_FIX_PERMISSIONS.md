@@ -40,16 +40,18 @@ Your current AWS credentials don't have IAM permissions. Use one of these:
 
 **Step 2: Configure AWS CLI with Root Credentials**
 
+Run this command:
 ```bash
-# Configure root profile
 aws configure --profile root
-
-# When prompted, enter:
-# AWS Access Key ID: [paste the Access Key ID from step 1]
-# AWS Secret Access Key: [paste the Secret Access Key from step 1]
-# Default region name: us-east-1
-# Default output format: json
 ```
+
+**When prompted, enter:**
+- **AWS Access Key ID:** [paste the Access Key ID you got from Step 1]
+- **AWS Secret Access Key:** [paste the Secret Access Key you got from Step 1]
+- **Default region name:** `us-east-1`
+- **Default output format:** `json`
+
+**Important:** This creates a NEW profile called "root". Your existing "test" profile stays configured. You're just adding another profile.
 
 **Step 3: Attach Policies Using Root Profile**
 
