@@ -1,4 +1,4 @@
-index=observable_catalog earliest=-$lookback$@d latest=@d
+index=observable_catalog earliest=0 latest=now
 | stats min(strptime(first_seen,"%Y-%m-%dT%H:%M:%SZ")) as first_seen_epoch
         max(strptime(last_seen,"%Y-%m-%dT%H:%M:%SZ")) as last_seen_epoch
         sum(hit_count) as total_hits

@@ -118,9 +118,20 @@ class SplunkObservableExporter:
         query = query.replace('$lookback$', str(lookback_days))
         # Clean up query - remove any leading/trailing whitespace and ensure proper formatting
         query = query.strip()
+        # Normalize whitespace - replace multiple spaces/newlines with single space, but preserve pipe separators
+        import re
+        # Replace newlines with spaces, but keep pipes at start of lines
+        query = re.sub(r'\n\s*\|', ' |', query)  # Handle pipes at start of lines
+        query = re.sub(r'\s+', ' ', query)  # Replace multiple spaces with single space
+        query = query.strip()
+        
+        # Splunk REST API requires 'search' command prefix for some queries
+        if not query.lower().startswith('search '):
+            query = f'search {query}'
         
         logger.info(f"Executing Splunk search (lookback: {lookback_days} days)")
-        logger.debug(f"Query: {query[:200]}...")  # Log first 200 chars for debugging
+        logger.info(f"Query (first 500 chars): {query[:500]}")
+        logger.info(f"Query length: {len(query)}")
         
         try:
             job = self.splunk_client.jobs.create(query, **{
