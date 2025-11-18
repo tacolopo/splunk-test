@@ -234,13 +234,18 @@ docker logs splunk | tail -10
 
 **Once Splunk is ready, verify it's running:**
 ```bash
-# Check if Splunk web interface responds
-curl -k https://localhost:8000 2>&1 | head -5
+# Check if Splunk web interface responds (use HTTP, not HTTPS)
+curl http://localhost:8000 2>&1 | head -5
 
-# Or just open in browser:
-# http://localhost:8000
-# Login: admin / Changeme123!
+# Should see HTML response with "Splunk" in it
 ```
+
+**Or open in browser:**
+- Go to: **http://localhost:8000** (HTTP, not HTTPS)
+- Login: `admin` / `Changeme123!`
+- You should see the Splunk dashboard
+
+**Note:** Splunk web UI uses HTTP on port 8000. The API uses HTTPS on port 8089.
 
 **If you see license errors**, make sure you have both environment variables:
 - `SPLUNK_GENERAL_TERMS='--accept-sgt-current-at-splunk-com'`
