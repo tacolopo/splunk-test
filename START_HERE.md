@@ -10,49 +10,53 @@ Your code is now available at the link above. You can access it from any AWS ins
 
 ## 📋 Quick Start (30 minutes, $0)
 
-### STEP 1: Create AWS Resources ⚠️ START HERE
+### 🖥️ Testing from Your Local Machine? ⭐ START HERE
 
-**You need to create 3 AWS resources from scratch:**
+**📖 LOCAL_MACHINE_GUIDE.md** - Complete guide for running everything from your laptop
 
-1. **DynamoDB Table** - For fast IP lookups
-2. **S3 Bucket** - For historical data
-3. **Secrets Manager Secret** - For Splunk credentials
+https://github.com/tacolopo/splunk-test/blob/master/LOCAL_MACHINE_GUIDE.md
 
-**📖 Complete AWS Setup Guide**: `AWS_SETUP.md`
+This guide clearly marks:
+- 💻 **Commands to run on YOUR LOCAL MACHINE**
+- 🌐 **Actions to do in AWS Console (browser)**
+- ✅ No confusion about where things run
 
-Or view online: https://github.com/tacolopo/splunk-test/blob/master/AWS_SETUP.md
-
-**Quick commands:**
-```bash
-git clone https://github.com/tacolopo/splunk-test.git
-cd splunk-test
-pip install -r requirements.txt
-
-# Create DynamoDB table
-python create_dynamodb_table.py --region us-east-1
-
-# Create S3 bucket
-aws s3 mb s3://splunk-obs-$(date +%s) --region us-east-1
-
-# Create Secrets Manager secret
-aws secretsmanager create-secret --name splunk/credentials \
-  --secret-string '{"host":"localhost","port":"8089","username":"admin","password":"Changeme123!","scheme":"https"}'
-```
+**Perfect if:**
+- You have Docker Desktop on your laptop
+- You want to test everything locally first
+- You already cloned the repo
 
 ---
 
-### STEP 2: Follow the Full Testing Guide
+### ☁️ Testing from AWS EC2/Cloud9?
 
-**Open this file**: `QUICKSTART.md`
+**📖 AWS_SETUP.md** - Guide for setting up AWS resources first
 
-Or view it online: https://github.com/tacolopo/splunk-test/blob/master/QUICKSTART.md
+https://github.com/tacolopo/splunk-test/blob/master/AWS_SETUP.md
 
-This guide includes:
-- ✅ Every command you need to run
-- ✅ Setting up Docker Splunk
-- ✅ Running the export script
-- ✅ Verifying the data
-- ✅ Troubleshooting tips
+Use this if you need to create an EC2 instance or Cloud9 environment first.
+
+---
+
+### 🚀 Quick Commands (If Using Local Machine)
+
+```bash
+# You're already in the repo, so just:
+cd /home/user/Documents/Splunk\ to\ AWS\ Project
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create AWS resources
+python create_dynamodb_table.py --region us-east-1
+aws s3 mb s3://splunk-obs-$(date +%s) --region us-east-1
+
+# Start Docker Splunk
+docker run -d -p 8000:8000 -p 8089:8089 \
+  -e SPLUNK_PASSWORD='Changeme123!' --name splunk splunk/splunk:latest
+
+# Then follow LOCAL_MACHINE_GUIDE.md for complete steps
+```
 
 ---
 
