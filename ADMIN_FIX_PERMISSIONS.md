@@ -28,11 +28,32 @@ Your current AWS credentials don't have IAM permissions. Use one of these:
 
 ### Option 1: Use Root Account Credentials
 
-```bash
-# Configure root account
-aws configure --profile root
-# Enter root account access key and secret
+**Step 1: Get Root Account Access Keys**
 
+1. Log into AWS Console: https://console.aws.amazon.com
+2. Click your username (top right) → **Security credentials**
+3. Scroll to **Access keys** section
+4. Click **Create access key**
+5. Select **Command Line Interface (CLI)**
+6. Click **Next** → **Create access key**
+7. **SAVE THE ACCESS KEY ID AND SECRET ACCESS KEY** (you won't see the secret again!)
+
+**Step 2: Configure AWS CLI with Root Credentials**
+
+```bash
+# Configure root profile
+aws configure --profile root
+
+# When prompted, enter:
+# AWS Access Key ID: [paste the Access Key ID from step 1]
+# AWS Secret Access Key: [paste the Secret Access Key from step 1]
+# Default region name: us-east-1
+# Default output format: json
+```
+
+**Step 3: Attach Policies Using Root Profile**
+
+```bash
 # Attach policies using root profile
 aws iam attach-user-policy \
   --user-name test \
@@ -49,6 +70,8 @@ aws iam attach-user-policy \
   --policy-arn arn:aws:iam::aws:policy/SecretsManagerReadWrite \
   --profile root
 ```
+
+**Note:** Root account = the email/password you used to sign up for AWS. You don't create it in IAM - it's the account owner.
 
 ### Option 2: Use AWS Console (Browser)
 
