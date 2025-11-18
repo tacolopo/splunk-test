@@ -18,6 +18,16 @@ aws iam attach-user-policy \
   --user-name test \
   --policy-arn arn:aws:iam::aws:policy/SecretsManagerReadWrite
 
+# Grant Athena permissions (for querying S3 data)
+aws iam attach-user-policy \
+  --user-name test \
+  --policy-arn arn:aws:iam::aws:policy/AmazonAthenaFullAccess
+
+# Grant Glue permissions (Athena uses Glue Data Catalog)
+aws iam attach-user-policy \
+  --user-name test \
+  --policy-arn arn:aws:iam::aws:policy/AWSGlueServiceRole
+
 # Verify policies are attached
 aws iam list-attached-user-policies --user-name test
 ```
@@ -71,6 +81,16 @@ aws iam attach-user-policy \
   --user-name test \
   --policy-arn arn:aws:iam::aws:policy/SecretsManagerReadWrite \
   --profile root
+
+aws iam attach-user-policy \
+  --user-name test \
+  --policy-arn arn:aws:iam::aws:policy/AmazonAthenaFullAccess \
+  --profile root
+
+aws iam attach-user-policy \
+  --user-name test \
+  --policy-arn arn:aws:iam::aws:policy/AWSGlueServiceRole \
+  --profile root
 ```
 
 **Note:** Root account = the email/password you used to sign up for AWS. You don't create it in IAM - it's the account owner.
@@ -83,6 +103,8 @@ aws iam attach-user-policy \
    - `AmazonDynamoDBFullAccess`
    - `AmazonS3FullAccess`
    - `SecretsManagerReadWrite`
+   - `AmazonAthenaFullAccess`
+   - `AWSGlueServiceRole`
 4. Click **Next** → **Add permissions**
 
 ### Option 3: Create Admin User with IAM Permissions
@@ -118,6 +140,16 @@ aws iam attach-user-policy \
   --user-name test \
   --policy-arn arn:aws:iam::aws:policy/SecretsManagerReadWrite \
   --profile admin-iam
+
+aws iam attach-user-policy \
+  --user-name test \
+  --policy-arn arn:aws:iam::aws:policy/AmazonAthenaFullAccess \
+  --profile admin-iam
+
+aws iam attach-user-policy \
+  --user-name test \
+  --policy-arn arn:aws:iam::aws:policy/AWSGlueServiceRole \
+  --profile admin-iam
 ```
 
 ## Verify It Worked
@@ -130,6 +162,8 @@ aws iam list-attached-user-policies --user-name test
 # - AmazonDynamoDBFullAccess
 # - AmazonS3FullAccess
 # - SecretsManagerReadWrite
+# - AmazonAthenaFullAccess
+# - AWSGlueServiceRole
 ```
 
 ## Then Continue Testing

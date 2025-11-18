@@ -57,6 +57,10 @@ aws iam attach-user-policy --user-name test --policy-arn arn:aws:iam::aws:policy
 aws iam attach-user-policy --user-name test --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess --profile root
 
 aws iam attach-user-policy --user-name test --policy-arn arn:aws:iam::aws:policy/SecretsManagerReadWrite --profile root
+
+aws iam attach-user-policy --user-name test --policy-arn arn:aws:iam::aws:policy/AmazonAthenaFullAccess --profile root
+
+aws iam attach-user-policy --user-name test --policy-arn arn:aws:iam::aws:policy/AWSGlueServiceRole --profile root
 ```
 
 Each command should complete without errors.
@@ -69,7 +73,12 @@ Each command should complete without errors.
 aws iam list-attached-user-policies --user-name test
 ```
 
-You should see all 3 policies listed.
+You should see all 5 policies listed:
+- AmazonDynamoDBFullAccess
+- AmazonS3FullAccess
+- SecretsManagerReadWrite
+- AmazonAthenaFullAccess
+- AWSGlueServiceRole
 
 ---
 
