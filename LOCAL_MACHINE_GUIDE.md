@@ -610,6 +610,15 @@ Athena lets you query S3 files like a database. First, create a table:
 # Set your bucket name
 export S3_BUCKET="splunk-observables-1763476191"  # Replace with your bucket
 
+# IMPORTANT: First, create the Athena results folder in S3
+aws s3 mb s3://${S3_BUCKET}/athena-results/ 2>/dev/null || echo "Folder may already exist"
+aws s3api put-object --bucket ${S3_BUCKET} --key athena-results/ 2>/dev/null || echo "Folder exists"
+
+# Verify permissions are attached (run with root/admin profile if needed):
+# aws iam list-attached-user-policies --user-name test --profile root
+
+# Wait a few seconds for IAM propagation if you just added policies
+
 # Create Athena database (one-time setup)
 aws athena start-query-execution \
   --query-string "CREATE DATABASE IF NOT EXISTS splunk_observables" \
