@@ -604,66 +604,58 @@ aws dynamodb get-item \
 
 **Option 2: Use AWS Athena (Best for historical analysis across many files)**
 
-Athena lets you query S3 files like a database. First, create a table:
+**Use AWS Console (CLI has permission issues):**
 
-```bash
-# Set your bucket name
-export S3_BUCKET="splunk-observables-1763476191"  # Replace with your bucket
+1. Go to: https://console.aws.amazon.com/athena/
+2. Click **Settings** tab → Set **Query result location** to: `s3://splunk-observables-1763476191/athena-results/`
+3. Click **Save**
+4. Go to **Editor** tab
 
-# IMPORTANT: First, create the Athena results folder in S3
-aws s3 mb s3://${S3_BUCKET}/athena-results/ 2>/dev/null || echo "Folder may already exist"
-aws s3api put-object --bucket ${S3_BUCKET} --key athena-results/ 2>/dev/null || echo "Folder exists"
-
-# Verify permissions are attached (run with root/admin profile if needed):
-# aws iam list-attached-user-policies --user-name test --profile root
-
-# Wait a few seconds for IAM propagation if you just added policies
-
-# Create Athena database (one-time setup)
-aws athena start-query-execution \
-  --query-string "CREATE DATABASE IF NOT EXISTS splunk_observables" \
-  --result-configuration OutputLocation=s3://${S3_BUCKET}/athena-results/ \
-  --region us-east-1
-
-# Create external table (one-time setup)
-aws athena start-query-execution \
-  --query-string "CREATE EXTERNAL TABLE IF NOT EXISTS splunk_observables.observables (
-    indicator string,
-    indicator_type string,
-    first_seen string,
-    last_seen string,
-    total_hits bigint,
-    days_seen double,
-    src_ips string,
-    dest_ips string,
-    users string,
-    sourcetypes string,
-    actions string,
-    unique_src_ips bigint,
-    unique_dest_ips bigint,
-    export_timestamp string
-  )
-  PARTITIONED BY (date string)
-  ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'
-  WITH SERDEPROPERTIES (
-    'serialization.format' = ',',
-    'field.delim' = ','
-  )
-  STORED AS INPUTFORMAT 'org.apache.hadoop.mapred.TextInputFormat'
-  OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
-  LOCATION 's3://${S3_BUCKET}/observables/'
-  TBLPROPERTIES ('skip.header.line.count'='1')" \
-  --result-configuration OutputLocation=s3://${S3_BUCKET}/athena-results/ \
-  --region us-east-1
-
-# Add partitions (discovers date folders automatically)
-aws athena start-query-execution \
-  --query-string "MSCK REPAIR TABLE splunk_observables.observables" \
-  --result-configuration OutputLocation=s3://${S3_BUCKET}/athena-results/ \
-  --region us-east-1
+**Step 1: Create Database**
+Run this query:
+```sql
+CREATE DATABASE IF NOT EXISTS splunk_observables
 ```
 
-Then query in AWS Console → Athena → Query Editor:
+**Step 2: Create Table**
+Run this query (replace bucket name if different):
+```sql
+CREATE EXTERNAL TABLE IF NOT EXISTS splunk_observables.observables (
+  indicator string,
+  indicator_type string,
+  first_seen string,
+  last_seen string,
+  total_hits bigint,
+  days_seen double,
+  src_ips string,
+  dest_ips string,
+  users string,
+  sourcetypes string,
+  actions string,
+  unique_src_ips bigint,
+  unique_dest_ips bigint,
+  export_timestamp string
+)
+PARTITIONED BY (date string)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'
+WITH SERDEPROPERTIES (
+  'serialization.format' = ',',
+  'field.delim' = ','
+)
+STORED AS INPUTFORMAT 'org.apache.hadoop.mapred.TextInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+LOCATION 's3://splunk-observables-1763476191/observables/'
+TBLPROPERTIES ('skip.header.line.count'='1')
+```
+
+**Step 3: Add Partitions**
+Run this query:
+```sql
+MSCK REPAIR TABLE splunk_observables.observables
+```
+
+**Step 4: Query Your Data**
+Now you can run queries like:
 ```sql
 -- Find a specific IP across all dates
 SELECT indicator, first_seen, last_seen, total_hits, date
