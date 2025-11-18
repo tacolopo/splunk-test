@@ -272,7 +272,22 @@ cat > sample_logs.json << EOF
 {"_time": "${CURRENT_DATE}T10:35:00", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "action": "web_request"}
 EOF
 
-# Method 1: Add data via Splunk Web UI (Recommended - easiest)
+# Method 1: Add data via REST API (Recommended - most reliable)
+# Send each JSON line as a separate event via Splunk's simple receiver
+while IFS= read -r line; do
+  curl -k -s -u admin:Changeme123! \
+    https://localhost:8089/services/receivers/simple \
+    -d "sourcetype=_json" \
+    -d "index=main" \
+    --data-urlencode "event=$line" > /dev/null
+done < sample_logs.json
+
+echo "✓ Data sent to Splunk. Verify with: index=main | head 10"
+
+# Method 2: Use the helper script (Alternative)
+# ./add_data_to_splunk.sh
+
+# Method 3: Add data via Splunk Web UI (Alternative)
 # 1. Open Splunk: http://localhost:8000
 # 2. Login: admin / Changeme123!
 # 3. Click "Add Data" (top right) or Settings → Add Data
@@ -281,37 +296,6 @@ EOF
 # 6. Set sourcetype to: _json
 # 7. Set index to: main
 # 8. Click "Review" → "Submit"
-
-# Method 2: Add data via REST API (Alternative)
-# Copy file into container first
-docker cp sample_logs.json splunk:/tmp/sample_logs.json
-
-# Use Splunk REST API to index the data
-# Note: The oneshot endpoint needs the file path accessible to Splunk
-curl -k -u admin:Changeme123! \
-  https://localhost:8089/services/data/inputs/oneshot \
-  -d name=/tmp/sample_logs.json \
-  -d sourcetype=_json \
-  -d index=main
-
-# If that doesn't work, try sending file content directly via HTTP Event Collector
-# First, enable HEC and get a token, or use this simpler method:
-
-# Method 2b: Send data directly via HTTP Event Collector (if enabled)
-# Or use the simpler approach - send each line as an event:
-while IFS= read -r line; do
-  curl -k -u admin:Changeme123! \
-    https://localhost:8089/services/receivers/simple \
-    -d "sourcetype=_json" \
-    -d "index=main" \
-    --data-urlencode "event=$line"
-done < sample_logs.json
-
-# Method 3: Use docker exec (if permissions work)
-# docker exec -u splunk splunk /opt/splunk/bin/splunk add oneshot /tmp/sample_logs.json \
-#   -sourcetype _json \
-#   -index main \
-#   -auth admin:Changeme123!
 ```
 
 ---
