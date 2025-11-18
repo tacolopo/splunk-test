@@ -589,6 +589,108 @@ aws s3 cp s3://${S3_BUCKET}/observables/$(aws s3 ls s3://${S3_BUCKET}/observable
 head -20 downloaded_observables.csv
 ```
 
+**⚠️ IMPORTANT: How to Search S3 Data**
+
+S3 has multiple files, so searching requires one of these approaches:
+
+**Option 1: Use DynamoDB (FASTEST - Recommended for operational lookups)**
+```bash
+# DynamoDB is designed for fast lookups - use it instead of searching S3!
+aws dynamodb get-item \
+  --table-name observable_catalog \
+  --key '{"indicator_key": {"S": "ip#10.0.0.1"}}' \
+  --region us-east-1 | python3 -m json.tool
+```
+
+**Option 2: Use AWS Athena (Best for historical analysis across many files)**
+
+Athena lets you query S3 files like a database. First, create a table:
+
+```bash
+# Set your bucket name
+export S3_BUCKET="splunk-observables-1763476191"  # Replace with your bucket
+
+# Create Athena database (one-time setup)
+aws athena start-query-execution \
+  --query-string "CREATE DATABASE IF NOT EXISTS splunk_observables" \
+  --result-configuration OutputLocation=s3://${S3_BUCKET}/athena-results/ \
+  --region us-east-1
+
+# Create external table (one-time setup)
+aws athena start-query-execution \
+  --query-string "CREATE EXTERNAL TABLE IF NOT EXISTS splunk_observables.observables (
+    indicator string,
+    indicator_type string,
+    first_seen string,
+    last_seen string,
+    total_hits bigint,
+    days_seen double,
+    src_ips string,
+    dest_ips string,
+    users string,
+    sourcetypes string,
+    actions string,
+    unique_src_ips bigint,
+    unique_dest_ips bigint,
+    export_timestamp string
+  )
+  PARTITIONED BY (date string)
+  ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'
+  WITH SERDEPROPERTIES (
+    'serialization.format' = ',',
+    'field.delim' = ','
+  )
+  STORED AS INPUTFORMAT 'org.apache.hadoop.mapred.TextInputFormat'
+  OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+  LOCATION 's3://${S3_BUCKET}/observables/'
+  TBLPROPERTIES ('skip.header.line.count'='1')" \
+  --result-configuration OutputLocation=s3://${S3_BUCKET}/athena-results/ \
+  --region us-east-1
+
+# Add partitions (discovers date folders automatically)
+aws athena start-query-execution \
+  --query-string "MSCK REPAIR TABLE splunk_observables.observables" \
+  --result-configuration OutputLocation=s3://${S3_BUCKET}/athena-results/ \
+  --region us-east-1
+```
+
+Then query in AWS Console → Athena → Query Editor:
+```sql
+-- Find a specific IP across all dates
+SELECT indicator, first_seen, last_seen, total_hits, date
+FROM splunk_observables.observables
+WHERE indicator_type = 'ip'
+  AND indicator = '10.0.0.1'
+ORDER BY date DESC;
+
+-- Find all IPs seen in last 7 days
+SELECT indicator, SUM(total_hits) as total_hits, MAX(last_seen) as last_seen
+FROM splunk_observables.observables
+WHERE indicator_type = 'ip'
+  AND date >= DATE_FORMAT(DATE_ADD('day', -7, CURRENT_DATE), '%Y-%m-%d')
+GROUP BY indicator
+ORDER BY total_hits DESC;
+```
+
+**Option 3: Quick Local Search (for testing)**
+```bash
+# Download all CSVs and search locally (only for small datasets!)
+mkdir -p /tmp/s3_search
+aws s3 sync s3://${S3_BUCKET}/observables/ /tmp/s3_search/ --exclude "*.json"
+
+# Search for IP in all CSVs
+grep -r "10.0.0.1" /tmp/s3_search/*.csv
+
+# Or use jq for JSON files
+aws s3 cp s3://${S3_BUCKET}/observables/date=2025-11-18/observables_20251118_105738.json - | \
+  jq '.[] | select(.indicator == "10.0.0.1")'
+```
+
+**Summary:**
+- **Fast lookups (< 1 second)**: Use DynamoDB (already set up!)
+- **Historical analysis**: Use AWS Athena (query multiple files)
+- **Quick testing**: Download and search locally
+
 ---
 
 ### Step 13: Verify in AWS Console (Browser)
