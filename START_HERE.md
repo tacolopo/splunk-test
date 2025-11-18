@@ -10,16 +10,38 @@ Your code is now available at the link above. You can access it from any AWS ins
 
 ## 📋 Quick Start (30 minutes, $0)
 
-Follow this guide when you log into AWS:
+### STEP 1: Create AWS Resources ⚠️ START HERE
 
-### 1. Clone the Repository
+**You need to create 3 AWS resources from scratch:**
 
+1. **DynamoDB Table** - For fast IP lookups
+2. **S3 Bucket** - For historical data
+3. **Secrets Manager Secret** - For Splunk credentials
+
+**📖 Complete AWS Setup Guide**: `AWS_SETUP.md`
+
+Or view online: https://github.com/tacolopo/splunk-test/blob/master/AWS_SETUP.md
+
+**Quick commands:**
 ```bash
 git clone https://github.com/tacolopo/splunk-test.git
 cd splunk-test
+pip install -r requirements.txt
+
+# Create DynamoDB table
+python create_dynamodb_table.py --region us-east-1
+
+# Create S3 bucket
+aws s3 mb s3://splunk-obs-$(date +%s) --region us-east-1
+
+# Create Secrets Manager secret
+aws secretsmanager create-secret --name splunk/credentials \
+  --secret-string '{"host":"localhost","port":"8089","username":"admin","password":"Changeme123!","scheme":"https"}'
 ```
 
-### 2. Follow the Step-by-Step Guide
+---
+
+### STEP 2: Follow the Full Testing Guide
 
 **Open this file**: `QUICKSTART.md`
 
@@ -28,7 +50,6 @@ Or view it online: https://github.com/tacolopo/splunk-test/blob/master/QUICKSTAR
 This guide includes:
 - ✅ Every command you need to run
 - ✅ Setting up Docker Splunk
-- ✅ Creating AWS resources (DynamoDB, S3, Secrets Manager)
 - ✅ Running the export script
 - ✅ Verifying the data
 - ✅ Troubleshooting tips
@@ -69,6 +90,7 @@ All documentation is in the repository:
 
 | File | Description |
 |------|-------------|
+| **`AWS_SETUP.md`** | **AWS resources setup from scratch** ⭐ START HERE |
 | **`QUICKSTART.md`** | **Complete step-by-step testing guide** ⭐ |
 | `CHEATSHEET.md` | Quick reference commands |
 | `README.md` | Full project documentation |
