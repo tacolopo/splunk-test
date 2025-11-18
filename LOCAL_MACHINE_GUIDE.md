@@ -454,11 +454,7 @@ Run this search in Splunk:
 index=observable_catalog | head 10
 ```
 
-**If no results:**
-1. Check if the search actually ran and completed (look for "0 events" or error messages)
-2. Verify the `collect` command at the end of the query is correct
-3. Make sure the `observable_catalog` index exists (Step 8a)
-4. Try running the search again with "All time" selected to ensure it processes your data
+**IMPORTANT: Change time range to "All time"** (the default "Last 24 hours" won't show your data if it's older)
 
 **Expected:** You should see aggregated observables (IPs with counts, first_seen, last_seen, indicator_type, etc.)
 
