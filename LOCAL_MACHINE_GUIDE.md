@@ -358,11 +358,17 @@ cat splunk_queries/observable_catalog.spl
 Copy the entire output and paste into Splunk search box.
 
 5. Click **Save**
-6. Click **Edit Schedule**:
-   - Enable scheduling: Yes
-   - **Cron Schedule:** `0 * * * *` (every hour)
-   - **Time Range:** `-1h@h to @h`
-7. Click **Save**
+
+6. **Enable Scheduling:**
+   - After saving, click **Edit Schedule** button
+   - In the "Edit Schedule" dialog, check the box **"Schedule Report"** (this enables scheduling)
+   - **Schedule Type:** Cron
+   - **Cron Schedule:** `0 * * * *` (runs every hour at :00)
+   - **Time Range:** `-1h@h to @h` (last hour)
+   - **Priority:** Default
+   - Click **Save**
+
+**Note:** If you see a warning about "removal of the time picker", that's normal - click through it.
 
 #### 8d. Run Search Manually (for immediate results)
 
