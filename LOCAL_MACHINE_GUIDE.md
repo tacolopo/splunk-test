@@ -670,9 +670,24 @@ ALTER TABLE splunk_observables.observables ADD PARTITION (date='2025-11-18') LOC
 ```
 
 **Step 4: Query Your Data**
-First, check if ANY data exists:
+**CRITICAL: First verify partitions exist:**
+```
+SHOW PARTITIONS splunk_observables.observables
+```
+
+If no partitions show, manually add:
+```
+ALTER TABLE splunk_observables.observables ADD PARTITION (date='2025-11-18') LOCATION 's3://splunk-observables-1763476191/observables/date=2025-11-18/'
+```
+
+Then check if ANY data exists (remove date filter):
 ```
 SELECT * FROM splunk_observables.observables LIMIT 10
+```
+
+If still no results, check the raw S3 location:
+```
+SELECT * FROM splunk_observables.observables WHERE date = '2025-11-18' LIMIT 10
 ```
 
 Then query specific IPs:
