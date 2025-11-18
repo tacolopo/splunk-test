@@ -71,34 +71,22 @@ Table observable_catalog created successfully!
 
 **If you get a permissions error:**
 
-**Option A: Ask AWS Admin to Add Permissions**
-- Contact your AWS administrator
-- Ask them to attach `AmazonDynamoDBFullAccess` policy to your user (`test`)
-- Or ask for these specific permissions:
-  - `dynamodb:CreateTable`
-  - `dynamodb:DescribeTable`
-  - `dynamodb:PutItem`
-  - `dynamodb:UpdateItem`
-  - `dynamodb:GetItem`
-  - `dynamodb:Scan`
-  - `dynamodb:Query`
+You need to add DynamoDB permissions to your user. As admin, run:
 
-**Option B: Create Table Manually in AWS Console** (if you have console access)
-1. Go to: AWS Console → DynamoDB → Tables
-2. Click **Create table**
-3. Fill in:
-   - **Table name:** `observable_catalog`
-   - **Partition key:** `indicator_key` (String)
-   - **Table settings:** Use default settings
-   - **Capacity mode:** On-demand
-4. Click **Create table**
-5. After table is created, add Global Secondary Index:
-   - Click on table → **Indexes** tab → **Create index**
-   - **Index name:** `indicator-type-index`
-   - **Partition key:** `indicator_type` (String)
-   - **Sort key:** `last_seen` (String)
-   - Click **Create index**
-6. Skip to Step 3 (Create S3 Bucket) - table is done!
+```bash
+# Run on YOUR LOCAL MACHINE (as admin)
+aws iam attach-user-policy \
+  --user-name test \
+  --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+
+# Verify it was attached
+aws iam list-attached-user-policies --user-name test
+```
+
+Then run the create table command again:
+```bash
+python create_dynamodb_table.py --region us-east-1
+```
 
 **What this created in AWS:**
 - Table name: `observable_catalog`
@@ -121,6 +109,14 @@ echo "Your S3 bucket: ${BUCKET_NAME}"
 # Save it for later use
 echo "export S3_BUCKET=${BUCKET_NAME}" >> ~/.bashrc
 source ~/.bashrc
+```
+
+**If you get permissions error:**
+```bash
+# Add S3 permissions
+aws iam attach-user-policy \
+  --user-name test \
+  --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess
 ```
 
 **What this created in AWS:**
@@ -147,6 +143,14 @@ aws secretsmanager create-secret \
     "scheme": "https"
   }' \
   --region us-east-1
+```
+
+**If you get permissions error:**
+```bash
+# Add Secrets Manager permissions
+aws iam attach-user-policy \
+  --user-name test \
+  --policy-arn arn:aws:iam::aws:policy/SecretsManagerReadWrite
 ```
 
 **What this created in AWS:**
@@ -531,6 +535,20 @@ aws s3 ls s3://${S3_BUCKET}/observables/ --recursive
 ---
 
 ## Troubleshooting
+
+### Permissions Errors (Admin Fix)
+
+If you get any "AccessDenied" errors, add the required policies:
+
+```bash
+# Add all required policies at once
+aws iam attach-user-policy --user-name test --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+aws iam attach-user-policy --user-name test --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess
+aws iam attach-user-policy --user-name test --policy-arn arn:aws:iam::aws:policy/SecretsManagerReadWrite
+
+# Verify policies attached
+aws iam list-attached-user-policies --user-name test
+```
 
 ### Splunk not starting
 
