@@ -11,10 +11,20 @@ def create_table(dynamodb_client, schema_file):
     
     table_name = schema['TableName']
     
+    # Remove any non-DynamoDB fields (like _comment)
+    dynamodb_params = {k: v for k, v in schema.items() if not k.startswith('_')}
+    
+    # Convert to resource format if needed, or use client format
+    # DynamoDB client expects specific format
     try:
-        table = dynamodb_client.create_table(**schema)
+        # Use create_table with filtered parameters
+        response = dynamodb_client.create_table(**dynamodb_params)
         print(f"Creating table {table_name}...")
-        table.wait_until_exists()
+        
+        # Wait for table to be active
+        waiter = dynamodb_client.get_waiter('table_exists')
+        waiter.wait(TableName=table_name)
+        
         print(f"Table {table_name} created successfully!")
     except dynamodb_client.exceptions.ResourceInUseException:
         print(f"Table {table_name} already exists")

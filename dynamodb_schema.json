@@ -1,6 +1,6 @@
 {
-  "_comment": "DynamoDB schema for observable catalog - supports all indicator types (IPs, emails, hashes, user agents, domains). Primary key format: {indicator_type}#{indicator} (e.g., 'ip#1.2.3.4', 'email#user@example.com', 'md5#abc123...')",
   "TableName": "observable_catalog",
+  "BillingMode": "PAY_PER_REQUEST",
   "KeySchema": [
     {
       "AttributeName": "indicator_key",
@@ -36,16 +36,8 @@
       ],
       "Projection": {
         "ProjectionType": "ALL"
-      },
-      "ProvisionedThroughput": {
-        "ReadCapacityUnits": 5,
-        "WriteCapacityUnits": 5
       }
     }
-  ],
-  "ProvisionedThroughput": {
-    "ReadCapacityUnits": 10,
-    "WriteCapacityUnits": 10
-  }
+  ]
 }
 
