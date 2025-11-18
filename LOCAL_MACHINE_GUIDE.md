@@ -259,16 +259,17 @@ curl http://localhost:8000 2>&1 | head -5
 # Run on YOUR LOCAL MACHINE
 cd /home/user/Documents/Splunk\ to\ AWS\ Project
 
-# Create sample security logs
-cat > sample_logs.json << 'EOF'
-{"_time": "2024-01-15T10:00:00", "src_ip": "1.2.3.4", "dest_ip": "10.0.0.1", "action": "blocked", "user": "admin"}
-{"_time": "2024-01-15T10:05:00", "src_ip": "8.8.8.8", "dest_ip": "10.0.0.2", "action": "allowed", "user": "user1"}
-{"_time": "2024-01-15T10:10:00", "src_ip": "1.2.3.4", "dest_ip": "10.0.0.3", "action": "blocked", "user": "admin"}
-{"_time": "2024-01-15T10:15:00", "src_ip": "192.168.1.100", "dest_ip": "8.8.8.8", "action": "allowed", "user": "user2"}
-{"_time": "2024-01-15T10:20:00", "email": "user@example.com", "action": "login", "src_ip": "203.0.113.5"}
-{"_time": "2024-01-15T10:25:00", "hash": "5d41402abc4b2a76b9719d911017c592", "action": "detected", "file": "malware.exe"}
-{"_time": "2024-01-15T10:30:00", "src_ip": "1.2.3.4", "dest_ip": "10.0.0.5", "action": "blocked", "user": "admin"}
-{"_time": "2024-01-15T10:35:00", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "action": "web_request"}
+# Create sample security logs with CURRENT date (so time filters work)
+CURRENT_DATE=$(date +%Y-%m-%d)
+cat > sample_logs.json << EOF
+{"_time": "${CURRENT_DATE}T10:00:00", "src_ip": "1.2.3.4", "dest_ip": "10.0.0.1", "action": "blocked", "user": "admin"}
+{"_time": "${CURRENT_DATE}T10:05:00", "src_ip": "8.8.8.8", "dest_ip": "10.0.0.2", "action": "allowed", "user": "user1"}
+{"_time": "${CURRENT_DATE}T10:10:00", "src_ip": "1.2.3.4", "dest_ip": "10.0.0.3", "action": "blocked", "user": "admin"}
+{"_time": "${CURRENT_DATE}T10:15:00", "src_ip": "192.168.1.100", "dest_ip": "8.8.8.8", "action": "allowed", "user": "user2"}
+{"_time": "${CURRENT_DATE}T10:20:00", "email": "user@example.com", "action": "login", "src_ip": "203.0.113.5"}
+{"_time": "${CURRENT_DATE}T10:25:00", "hash": "5d41402abc4b2a76b9719d911017c592", "action": "detected", "file": "malware.exe"}
+{"_time": "${CURRENT_DATE}T10:30:00", "src_ip": "1.2.3.4", "dest_ip": "10.0.0.5", "action": "blocked", "user": "admin"}
+{"_time": "${CURRENT_DATE}T10:35:00", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "action": "web_request"}
 EOF
 
 # Method 1: Add data via Splunk Web UI (Recommended - easiest)
@@ -317,11 +318,31 @@ curl -k -u admin:Changeme123! \
 #### 8b. Verify Sample Data
 
 1. Click **Search & Reporting** (left sidebar)
-2. Run this search:
+
+2. **Search WITHOUT time filter first (data might have old timestamps):**
    ```
-   index=main earliest=-24h | head 10
+   index=main | head 10
    ```
-3. You should see 8 events with IPs, emails, hashes
+   OR search all indexes:
+   ```
+   index=* | head 10
+   ```
+
+3. **If you see data, check by source:**
+   ```
+   source="*sample_logs*" | head 10
+   ```
+
+4. **Check what index the data is in:**
+   ```
+   source="*sample_logs*" | stats count by index
+   ```
+
+**Expected:** You should see 8 events with fields like `src_ip`, `dest_ip`, `email`, `hash`, etc.
+
+**Common Issue:** If your sample_logs.json has dates from 2024 but today is 2025, the `earliest=-24h` filter won't match. Either:
+- Search without time filter: `index=main | head 10`
+- Or recreate sample_logs.json with current date (the script above does this automatically)
 
 #### 8c. Create Scheduled Search
 
