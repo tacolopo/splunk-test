@@ -1,0 +1,8 @@
+{"_time": "2024-01-15T10:00:00", "src_ip": "1.2.3.4", "dest_ip": "10.0.0.1", "action": "blocked", "user": "admin"}
+{"_time": "2024-01-15T10:05:00", "src_ip": "8.8.8.8", "dest_ip": "10.0.0.2", "action": "allowed", "user": "user1"}
+{"_time": "2024-01-15T10:10:00", "src_ip": "1.2.3.4", "dest_ip": "10.0.0.3", "action": "blocked", "user": "admin"}
+{"_time": "2024-01-15T10:15:00", "src_ip": "192.168.1.100", "dest_ip": "8.8.8.8", "action": "allowed", "user": "user2"}
+{"_time": "2024-01-15T10:20:00", "email": "user@example.com", "action": "login", "src_ip": "203.0.113.5"}
+{"_time": "2024-01-15T10:25:00", "hash": "5d41402abc4b2a76b9719d911017c592", "action": "detected", "file": "malware.exe"}
+{"_time": "2024-01-15T10:30:00", "src_ip": "1.2.3.4", "dest_ip": "10.0.0.5", "action": "blocked", "user": "admin"}
+{"_time": "2024-01-15T10:35:00", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "action": "web_request"}
