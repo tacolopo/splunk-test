@@ -347,15 +347,24 @@ echo "✓ Data sent to Splunk. Verify with: index=main | head 10"
 1. Go to **Settings** → **Searches, reports, and alerts**
 2. Click **New Report**
 3. **Title:** `Observable Catalog - Hourly Summary`
-4. **Search:** Copy the entire query from `splunk_queries/observable_catalog.spl`
+4. **Search:** Copy the query from `splunk_queries/observable_catalog.spl`
 
-To copy the query:
+**For testing with sample data, use this TEST version instead:**
+
+To copy the test query (searches `index=main` instead of production indexes):
 ```bash
 # Run on YOUR LOCAL MACHINE
+cat splunk_queries/observable_catalog_test.spl
+```
+
+**OR for production (searches proxy/email/edr indexes):**
+```bash
 cat splunk_queries/observable_catalog.spl
 ```
 
 Copy the entire output and paste into Splunk search box.
+
+**Note:** The test version searches `index=main` (where your sample data is). The production version searches `index=proxy OR index=email OR index=edr...` (for real production data).
 
 5. Click **Save**
 
