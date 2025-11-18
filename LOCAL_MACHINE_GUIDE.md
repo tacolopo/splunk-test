@@ -287,11 +287,25 @@ EOF
 docker cp sample_logs.json splunk:/tmp/sample_logs.json
 
 # Use Splunk REST API to index the data
+# Note: The oneshot endpoint needs the file path accessible to Splunk
 curl -k -u admin:Changeme123! \
   https://localhost:8089/services/data/inputs/oneshot \
   -d name=/tmp/sample_logs.json \
   -d sourcetype=_json \
   -d index=main
+
+# If that doesn't work, try sending file content directly via HTTP Event Collector
+# First, enable HEC and get a token, or use this simpler method:
+
+# Method 2b: Send data directly via HTTP Event Collector (if enabled)
+# Or use the simpler approach - send each line as an event:
+while IFS= read -r line; do
+  curl -k -u admin:Changeme123! \
+    https://localhost:8089/services/receivers/simple \
+    -d "sourcetype=_json" \
+    -d "index=main" \
+    --data-urlencode "event=$line"
+done < sample_logs.json
 
 # Method 3: Use docker exec (if permissions work)
 # docker exec -u splunk splunk /opt/splunk/bin/splunk add oneshot /tmp/sample_logs.json \
