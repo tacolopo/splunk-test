@@ -9,7 +9,11 @@
 git clone https://github.com/tacolopo/splunk-test.git && cd splunk-test && pip install -r requirements.txt
 
 # Start Splunk Docker
-docker run -d -p 8000:8000 -p 8089:8089 -e SPLUNK_PASSWORD='Changeme123!' --name splunk splunk/splunk:latest
+docker run -d -p 8000:8000 -p 8089:8089 \
+  -e SPLUNK_GENERAL_TERMS='--accept-sgt-current-at-splunk-com' \
+  -e SPLUNK_START_ARGS='--accept-license' \
+  -e SPLUNK_PASSWORD='Changeme123!' \
+  --name splunk splunk/splunk:latest
 
 # Create AWS resources
 python create_dynamodb_table.py --region us-east-1 && aws s3 mb s3://splunk-obs-$(date +%s) --region us-east-1

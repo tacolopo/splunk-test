@@ -193,9 +193,15 @@ All these commands run on **your local machine**.
 
 ```bash
 # Run on YOUR LOCAL MACHINE
+# First, stop and remove any existing Splunk container
+docker stop splunk 2>/dev/null || true
+docker rm splunk 2>/dev/null || true
+
+# Start Splunk with proper license acceptance
 docker run -d \
   -p 8000:8000 \
   -p 8089:8089 \
+  -e SPLUNK_GENERAL_TERMS='--accept-sgt-current-at-splunk-com' \
   -e SPLUNK_START_ARGS='--accept-license' \
   -e SPLUNK_PASSWORD='Changeme123!' \
   --name splunk \
@@ -210,6 +216,10 @@ docker logs splunk | tail -20
 ```
 
 Look for "Ansible playbook complete" in the logs - that means Splunk is ready.
+
+**If you see license errors**, make sure you have both environment variables:
+- `SPLUNK_GENERAL_TERMS='--accept-sgt-current-at-splunk-com'`
+- `SPLUNK_START_ARGS='--accept-license'`
 
 **Verify Splunk is running:**
 - Open browser: http://localhost:8000
