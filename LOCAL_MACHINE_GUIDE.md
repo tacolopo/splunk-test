@@ -541,10 +541,23 @@ python export_to_aws.py \
 # Run on YOUR LOCAL MACHINE
 
 # Query for a specific IP
+# First, see what keys exist:
+aws dynamodb scan --table-name observable_catalog --region us-east-1 --max-items 5 \
+  --projection-expression "indicator_key" | python3 -m json.tool
+
+# Then query a specific item (replace with an actual key from above):
 aws dynamodb get-item \
   --table-name observable_catalog \
-  --key '{"indicator_key": {"S": "ip#1.2.3.4"}}' \
-  --region us-east-1
+  --key '{"indicator_key": {"S": "ip#10.0.0.1"}}' \
+  --region us-east-1 | python3 -m json.tool
+
+# Or query by indicator_type using GSI:
+aws dynamodb query \
+  --table-name observable_catalog \
+  --index-name indicator-type-index \
+  --key-condition-expression "indicator_type = :it" \
+  --expression-attribute-values '{":it": {"S": "ip"}}' \
+  --region us-east-1 | python3 -m json.tool
 
 # List all observables
 aws dynamodb scan \
