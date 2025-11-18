@@ -437,27 +437,13 @@ Copy the entire output and paste into Splunk search box.
    ```
    This shows the raw JSON. Verify it looks like: `{"_time": "...", "src_ip": "1.2.3.4", ...}`
 
-5. **If spath works, test the indicator extraction:**
-   ```
-   index=main sourcetype=_json
-   | spath
-   | eval indicator_type=if(isnotnull(src_ip) OR isnotnull(dest_ip), "ip", if(isnotnull(email), "email", if(isnotnull(hash), "hash", "other")))
-   | eval indicator=coalesce(dest_ip, src_ip, email, hash)
-   | where isnotnull(indicator) AND indicator!=""
-   | head 10
-   ```
-   This should show results if JSON extraction works.
-
-6. **Run the full query:**
-   - Use the test query: `cat splunk_queries/observable_catalog_test.spl`
+5. **Run the full query (skip test steps - just run it):**
+   - Get the query: `cat splunk_queries/observable_catalog_test.spl`
+   - Copy the ENTIRE query
+   - Paste into Splunk search box
    - Change time range to **All time** (to ensure it processes your data)
    - Click the green **Search** button
    - Wait ~10 seconds
-
-6. **If still no results:**
-   - Check if JSON fields are extracted: `index=main | head 1 | fields *`
-   - If fields aren't showing, Splunk might not be extracting JSON fields automatically
-   - Try: `index=main sourcetype=_json | head 1 | fields *`
 
 #### 8e. Verify Summary Index Has Data
 
