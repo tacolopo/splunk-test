@@ -1,0 +1,8 @@
+index=main
+| head 10
+| eval has_src_ip=if(isnotnull(src_ip), "yes", "no")
+| eval has_dest_ip=if(isnotnull(dest_ip), "yes", "no")
+| eval has_email=if(isnotnull(email), "yes", "no")
+| eval has_hash=if(isnotnull(hash), "yes", "no")
+| table _time src_ip dest_ip email hash user_agent action user has_src_ip has_dest_ip has_email has_hash
+

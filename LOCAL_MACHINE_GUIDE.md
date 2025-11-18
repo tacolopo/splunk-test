@@ -395,17 +395,32 @@ Copy the entire output and paste into Splunk search box.
    ```
    Then update the query to use the correct index.
 
-3. **Run the full query with adjusted time range:**
-   - Change time range to **Last 24 hours** (or "All time" to test)
-   - The query should start with: `index=main earliest=-24h@h latest=@h`
-   - If you changed it to "Last 24 hours", the query should be: `index=main earliest=-24h latest=now`
+3. **First, debug what fields exist:**
+   ```
+   index=main | head 1 | fields *
+   ```
+   This shows all fields in your data. Verify you see: `src_ip`, `dest_ip`, `email`, `hash`, `user_agent`
+
+4. **If fields exist, test a simpler version:**
+   ```
+   index=main
+   | eval indicator_type=if(isnotnull(src_ip) OR isnotnull(dest_ip), "ip", if(isnotnull(email), "email", if(isnotnull(hash), "hash", "other")))
+   | eval indicator=coalesce(src_ip, dest_ip, email, hash)
+   | where isnotnull(indicator) AND indicator!=""
+   | head 10
+   ```
+   This should show at least some results if fields are extracted correctly.
+
+5. **Run the full query:**
+   - Use the test query: `cat splunk_queries/observable_catalog_test.spl`
+   - Change time range to **All time** (to ensure it processes your data)
    - Click the green **Search** button
    - Wait ~10 seconds
 
-4. **If still no results, check:**
-   - Does `index=main | head 10` show your sample data?
-   - Are the field names correct? Check: `index=main | head 1 | fields *`
-   - You should see fields like `src_ip`, `dest_ip`, `email`, `hash`
+6. **If still no results:**
+   - Check if JSON fields are extracted: `index=main | head 1 | fields *`
+   - If fields aren't showing, Splunk might not be extracting JSON fields automatically
+   - Try: `index=main sourcetype=_json | head 1 | fields *`
 
 #### 8e. Verify Summary Index Has Data
 
