@@ -212,19 +212,39 @@ echo "Waiting for Splunk to start..."
 sleep 120
 
 # Check if it's running
-docker logs splunk | tail -20
+docker logs splunk | tail -30
 ```
 
-Look for "Ansible playbook complete" in the logs - that means Splunk is ready.
+**What to look for:**
+
+Splunk is still starting if you see:
+- Ansible tasks running (like "TASK [splunk_standalone...]")
+- "Check for required restarts"
+- Various initialization tasks
+
+**Splunk is ready when you see:**
+- "Ansible playbook complete" OR
+- "Splunk started successfully" OR
+- No new log entries for 30+ seconds
+
+**If logs keep scrolling, wait another minute and check again:**
+```bash
+docker logs splunk | tail -10
+```
+
+**Once Splunk is ready, verify it's running:**
+```bash
+# Check if Splunk web interface responds
+curl -k https://localhost:8000 2>&1 | head -5
+
+# Or just open in browser:
+# http://localhost:8000
+# Login: admin / Changeme123!
+```
 
 **If you see license errors**, make sure you have both environment variables:
 - `SPLUNK_GENERAL_TERMS='--accept-sgt-current-at-splunk-com'`
 - `SPLUNK_START_ARGS='--accept-license'`
-
-**Verify Splunk is running:**
-- Open browser: http://localhost:8000
-- Login: `admin` / `Changeme123!`
-- You should see the Splunk dashboard
 
 ---
 
