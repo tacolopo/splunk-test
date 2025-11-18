@@ -619,22 +619,26 @@ CREATE DATABASE IF NOT EXISTS splunk_observables
 
 **Step 2: Create Table**
 Copy and paste ONLY the SQL below (replace bucket name if different):
+**IMPORTANT: Drop the table first if it already exists:**
+```
+DROP TABLE IF EXISTS splunk_observables.observables
+```
+
+Then create the table matching your CSV format:
 ```
 CREATE EXTERNAL TABLE IF NOT EXISTS splunk_observables.observables (
+  actions string,
+  dest_ips string,
+  export_timestamp string,
   indicator string,
   indicator_type string,
-  first_seen string,
-  last_seen string,
-  total_hits bigint,
-  days_seen double,
-  src_ips string,
-  dest_ips string,
-  users string,
   sourcetypes string,
-  actions string,
-  unique_src_ips bigint,
+  src_ips string,
+  total_hits bigint,
+  types string,
   unique_dest_ips bigint,
-  export_timestamp string
+  unique_src_ips bigint,
+  users string
 )
 PARTITIONED BY (date string)
 ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe'
@@ -676,7 +680,7 @@ Now you can run queries like (copy ONLY the SQL, not the "sql" marker):
 
 Find a specific IP across all dates:
 ```
-SELECT indicator, first_seen, last_seen, total_hits, date
+SELECT indicator, indicator_type, total_hits, src_ips, dest_ips, date
 FROM splunk_observables.observables
 WHERE indicator_type = 'ip'
   AND indicator = '10.0.0.1'
