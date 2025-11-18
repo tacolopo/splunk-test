@@ -69,9 +69,15 @@ Creating table observable_catalog...
 Table observable_catalog created successfully!
 ```
 
+**If you get a permissions error:**
+- Your AWS user needs `dynamodb:CreateTable` permission
+- Go to AWS Console → IAM → Users → Your User → Add permissions
+- Add policy: `AmazonDynamoDBFullAccess` (or create custom policy with just CreateTable)
+
 **What this created in AWS:**
 - Table name: `observable_catalog`
 - Region: us-east-1
+- Billing: PAY_PER_REQUEST (auto-scales, free tier eligible)
 - You can view it: AWS Console → DynamoDB → Tables
 
 ---
