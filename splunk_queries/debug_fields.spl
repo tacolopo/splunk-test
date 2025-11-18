@@ -1,2 +1,0 @@
-index=main | head 1 | fields *
-

@@ -189,34 +189,15 @@ resource "aws_iam_role_policy" "lambda_policy" {
   })
 }
 
-resource "aws_s3_object" "lambda_layer" {
-  bucket = aws_s3_bucket.observables.id
-  key    = "lambda-layer.zip"
-  source = "lambda_layer_optimized.zip"
-  etag   = filemd5("lambda_layer_optimized.zip")
-}
-
-resource "aws_lambda_layer_version" "dependencies" {
-  layer_name          = "splunk-exporter-dependencies"
-  compatible_runtimes = ["python3.11"]
-  s3_bucket           = aws_s3_bucket.observables.id
-  s3_key              = aws_s3_object.lambda_layer.key
-  s3_object_version    = aws_s3_object.lambda_layer.version_id
-
-  description = "Dependencies for Splunk observable exporter"
-}
-
 resource "aws_lambda_function" "observable_exporter" {
-  filename         = "lambda_function.zip"
+  filename         = "lambda_tiny.zip"
   function_name    = "splunk-observable-exporter"
   role            = aws_iam_role.lambda_execution.arn
   handler         = "lambda_function.lambda_handler"
-  source_code_hash = filebase64sha256("lambda_function.zip")
+  source_code_hash = filebase64sha256("lambda_tiny.zip")
   runtime         = "python3.11"
   timeout         = 900
   memory_size     = 512
-
-  layers = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {
