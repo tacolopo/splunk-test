@@ -720,21 +720,68 @@ class SplunkObservableExporter:
             return True
     
     def _load_existing_master_file(self, bucket: str, parquet_key: str) -> List[Dict]:
+        s3_prefix = self.config['aws'].get('s3_prefix', 'observables')
+        json_key = f"{s3_prefix}/master.json"
+        csv_key = f"{s3_prefix}/master.csv"
+        
         try:
-            temp_file = Path('/tmp') / 'existing_master.parquet'
-            self.s3_client.download_file(bucket, parquet_key, str(temp_file))
+            temp_json = Path('/tmp') / 'existing_master.json'
+            self.s3_client.download_file(bucket, json_key, str(temp_json))
             
-            logger.warning("Parquet libraries not available, cannot load existing master file")
-            temp_file.unlink()
-            return []
+            with open(temp_json, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            temp_json.unlink()
+            logger.info(f"Loaded existing S3 master file with {len(data)} records (lifetime history)")
+            return data
+            
         except self.s3_client.exceptions.NoSuchKey:
-            logger.info("No existing master file found, creating new one")
+            logger.info("No existing master file found in S3, will create new one")
             return []
         except Exception as e:
-            logger.warning(f"Could not load existing master file: {e}, creating new one")
-            return []
+            logger.warning(f"Could not load existing master file from S3: {e}")
+            try:
+                temp_csv = Path('/tmp') / 'existing_master.csv'
+                self.s3_client.download_file(bucket, csv_key, str(temp_csv))
+                
+                data = []
+                numeric_fields = {'total_hits', 'days_seen', 'unique_src_ips', 'unique_dest_ips'}
+                list_fields = {'src_ips', 'dest_ips', 'users', 'sourcetypes', 'actions', 'types'}
+                
+                with open(temp_csv, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        processed_row = {}
+                        for k, v in row.items():
+                            if v == '' or v is None:
+                                processed_row[k] = None if k not in list_fields else []
+                            elif k in list_fields and '|' in str(v):
+                                processed_row[k] = [x.strip() for x in v.split('|') if x.strip()]
+                            elif k in list_fields:
+                                processed_row[k] = [v] if v else []
+                            elif k in numeric_fields:
+                                try:
+                                    if '.' in str(v):
+                                        processed_row[k] = float(v)
+                                    else:
+                                        processed_row[k] = int(v)
+                                except (ValueError, TypeError):
+                                    processed_row[k] = 0
+                            else:
+                                processed_row[k] = v
+                        data.append(processed_row)
+                
+                temp_csv.unlink()
+                logger.info(f"Loaded existing S3 master file from CSV with {len(data)} records (lifetime history)")
+                return data
+                
+            except Exception as csv_error:
+                logger.warning(f"Could not load existing master CSV either: {csv_error}, creating new master file")
+                return []
     
     def _merge_master_data(self, existing_data: List[Dict], new_data: List[Dict]) -> List[Dict]:
+        logger.info(f"Merging S3 lifetime data ({len(existing_data)} records) with DynamoDB current data ({len(new_data)} records)")
+        
         def parse_iso_timestamp(ts_str):
             try:
                 if ts_str and ts_str != '' and ts_str != 'None':
@@ -795,7 +842,19 @@ class SplunkObservableExporter:
                 else:
                     final_last_seen = datetime.now().isoformat() + 'Z'
                 
-                final_total_hits = existing_total_hits + new_total_hits
+                if new_first_ts and existing_last_ts and new_first_ts > existing_last_ts:
+                    final_total_hits = existing_total_hits + new_total_hits
+                    gap_days = (new_first_ts - existing_last_ts).days
+                    logger.info(f"Record {key}: Gap of {gap_days} days detected (expired from DynamoDB, now returned). Adding cumulative hits: {existing_total_hits} (S3 lifetime) + {new_total_hits} (DynamoDB fresh) = {final_total_hits}")
+                else:
+                    final_total_hits = max(existing_total_hits, new_total_hits)
+                    if new_total_hits > existing_total_hits:
+                        daily_increase = new_total_hits - existing_total_hits
+                        logger.info(f"Record {key}: Continuous tracking. DynamoDB accumulated {daily_increase} new hits since last S3 update. Total: {existing_total_hits} → {final_total_hits}")
+                    elif new_total_hits < existing_total_hits:
+                        logger.warning(f"Record {key}: DynamoDB has fewer hits ({new_total_hits}) than S3 lifetime ({existing_total_hits}). Preserving S3 value (possible data issue).")
+                    else:
+                        logger.debug(f"Record {key}: No change in hit count ({final_total_hits})")
                 
                 final_first_ts = parse_iso_timestamp(final_first_seen)
                 final_last_ts = parse_iso_timestamp(final_last_seen)
@@ -831,7 +890,13 @@ class SplunkObservableExporter:
                 merged_dict[key] = new_item.copy()
                 merged_dict[key]['export_timestamp'] = datetime.now().isoformat() + 'Z'
         
-        return list(merged_dict.values())
+        result = list(merged_dict.values())
+        records_only_in_s3 = len(existing_dict) - len([k for k in existing_dict if k in [f"{item.get('indicator_type', '')}#{item.get('indicator', '')}" for item in new_data]])
+        records_in_both = len([k for k in existing_dict if k in [f"{item.get('indicator_type', '')}#{item.get('indicator', '')}" for item in new_data]])
+        records_only_in_dynamodb = len(new_data) - records_in_both
+        logger.info(f"S3 Master Merge Summary: {len(result)} total records ({records_only_in_s3} only in S3 lifetime, {records_in_both} updated from DynamoDB, {records_only_in_dynamodb} new from DynamoDB)")
+        
+        return result
 
 
 def load_config(config_path: str) -> Dict:

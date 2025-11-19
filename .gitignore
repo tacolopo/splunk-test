@@ -63,5 +63,4 @@ temp/
 
 # All markdown documentation files
 *.md
-!README.md
-!terraform/README.md
+
